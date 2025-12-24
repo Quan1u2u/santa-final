@@ -494,10 +494,11 @@ if prompt := st.chat_input("Đoán tên (Cần cả Họ Tên) hoặc hỏi gợ
         4. [[CHAT]] : Các câu chat xã giao thông thường, không đoán tên cũng không xin gợi ý.
 
         Lưu ý:
-        - KHÔNG tiết lộ tên thật trừ khi đã có token [[WIN]].
+        - KHÔNG tiết lộ tên thật và mshs (hoặc mã số học sinh) trừ khi đã có token [[WIN]].
         - Hỗ trợ toán học về MSHS (chia hết, lớn hơn, nhỏ hơn...).
         - Gợi ý tên: Số chữ cái, chữ cái đầu.
-        - Nếu user không ghi đủ họ và tên thì nhắc nhở user
+        - Nếu user không ghi đủ họ và tên thì nhắc nhở user.
+        - Làm khó game hơn nữa.
         """
 
         messages_payload = [{"role": "system", "content": system_instruction}]
@@ -565,3 +566,4 @@ if prompt := st.chat_input("Đoán tên (Cần cả Họ Tên) hoặc hỏi gợ
 
     except Exception as e:
         st.error(f"Lỗi kết nối AI: {str(e)}")
+
