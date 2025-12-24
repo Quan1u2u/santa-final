@@ -11,7 +11,12 @@ import base64
 # ==============================================================================
 # 1. CẤU HÌNH & CONSTANTS
 # ==============================================================================
-FIXED_GROQ_API_KEY = "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" 
+# --- LƯU Ý: NẾU ĐÃ DEPLOY LÊN STREAMLIT CLOUD THÌ DÙNG st.secrets ---
+try:
+    FIXED_GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
+except:
+    FIXED_GROQ_API_KEY = "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" 
+
 FIXED_CSV_PATH = "res.csv"
 LOG_FILE_PATH = "game_logs.csv"  
 ADMIN_PASSWORD = "admin" 
@@ -52,6 +57,18 @@ def log_activity(user_name, action):
     with open(LOG_FILE_PATH, mode='a', newline='', encoding='utf-8') as f:
         csv.writer(f).writerow([time_now, user_name, action])
 
+def check_if_lost(user_name):
+    """Kiểm tra xem người chơi đã có trong danh sách thua cuộc chưa"""
+    if not os.path.exists(LOG_FILE_PATH):
+        return False
+    try:
+        df = pd.read_csv(LOG_FILE_PATH)
+        # Lọc ra những dòng có hành động là GAME OVER
+        losers = df[df['Hành động'] == 'GAME OVER']['Người chơi'].unique()
+        return user_name in losers
+    except Exception:
+        return False
+
 def get_gender(name):
     for female in FEMALE_NAMES:
         if female.lower() in name.lower(): return "Nữ"
@@ -59,16 +76,8 @@ def get_gender(name):
 
 def load_data(filepath):
     try:
-        # Tạo dữ liệu giả để test nếu không có file CSV
         if not os.path.exists(filepath):
-            return [{
-                "search_key": "nguyen van a",
-                "user_name": "Nguyen Van A",
-                "user_id": "250231",
-                "santa_name": "Tran Thi B",
-                "santa_id": "250232"
-            }]
-            
+            return []    
         df = pd.read_csv(filepath)
         df.columns = df.columns.str.strip()
         profiles = []
@@ -227,21 +236,27 @@ if st.session_state.user_info is None and not st.session_state.is_admin:
             matches = [p for p in profiles if query.lower() in p['search_key'] or query in p['user_id']]
             
             if len(matches) == 1:
-                st.session_state.user_info = matches[0]
-                # Reset trạng thái game
-                st.session_state.question_count = 0
-                st.session_state.wrong_guesses = 0
-                st.session_state.game_status = "PLAYING"
-                st.session_state.messages = []
-                # Bắt đầu tính giờ cho User
-                st.session_state.start_time = time.time()
+                selected_user = matches[0]
                 
-                log_activity(matches[0]['user_name'], "Login")
-                
-                # Tin nhắn chào mừng
-                welcome_msg = f"Ho Ho Ho! Chào **{matches[0]['user_name']}**! 🎅\nTa đang giữ bí mật về người tặng quà cho con.\n\nLuật chơi: Con có **3 câu hỏi** và **2 mạng**.\nLưu ý: Phải đoán đúng **HỌ VÀ TÊN** mới thắng nhé!"
-                st.session_state.messages.append({"role": "assistant", "content": welcome_msg})
-                st.rerun()
+                # --- CHECK XEM NGƯỜI NÀY ĐÃ THUA CHƯA ---
+                if check_if_lost(selected_user['user_name']):
+                    st.error(f"🚫 {selected_user['user_name']} ơi, bạn đã dùng hết mạng và thua cuộc rồi! Không thể đăng nhập lại.")
+                else:
+                    st.session_state.user_info = selected_user
+                    # Reset trạng thái game
+                    st.session_state.question_count = 0
+                    st.session_state.wrong_guesses = 0
+                    st.session_state.game_status = "PLAYING"
+                    st.session_state.messages = []
+                    # Bắt đầu tính giờ cho User
+                    st.session_state.start_time = time.time()
+                    
+                    log_activity(selected_user['user_name'], "Login")
+                    
+                    # Tin nhắn chào mừng
+                    welcome_msg = f"Ho Ho Ho! Chào **{selected_user['user_name']}**! 🎅\nTa đang giữ bí mật về người tặng quà cho con.\n\nLuật chơi: Con có **3 câu hỏi** và **2 mạng**.\nLưu ý: Phải đoán đúng **HỌ VÀ TÊN** mới thắng nhé!"
+                    st.session_state.messages.append({"role": "assistant", "content": welcome_msg})
+                    st.rerun()
             elif len(matches) > 1:
                 st.warning("⚠️ Có nhiều người trùng tên, vui lòng nhập MSHS.")
             else:
@@ -249,61 +264,99 @@ if st.session_state.user_info is None and not st.session_state.is_admin:
     st.stop()
 
 # ==============================================================================
-# 6. MÀN HÌNH ADMIN (ĐÃ UPDATE TIMER CHẠY LIÊN TỤC)
+# 6. MÀN HÌNH ADMIN (TIMER + COUNTDOWN)
 # ==============================================================================
 if st.session_state.is_admin:
     st.title("🛡️ TRUNG TÂM CHỈ HUY (ADMIN)")
     
-    # ----------------------------------------------------
-    # TÍNH NĂNG TIMER REAL-TIME BẰNG JAVASCRIPT
-    # ----------------------------------------------------
     # Tính tổng số giây đã trôi qua kể từ khi server chạy (Python)
     initial_uptime_seconds = (datetime.datetime.now() - SERVER_START_TIME).total_seconds()
     
-    # Chèn HTML & JS để tự đếm tiếp ở trình duyệt
-    timer_html = f"""
-    <div style="
-        padding: 15px;
-        border: 2px solid #FFD700;
-        border-radius: 10px;
-        background-color: #222222;
-        color: #FFD700;
-        font-family: 'Arial', sans-serif;
-        font-weight: bold;
-        text-align: center;
-        font-size: 24px;
-        margin-bottom: 20px;
-        box-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
-    ">
-        ⏱️ Uptime: <span id="uptime_clock">Loading...</span>
+    # ----------------------------------------------------
+    # JS: UPTIME CLOCK + 5 MINS COUNTDOWN
+    # ----------------------------------------------------
+    dashboard_html = f"""
+    <div style="display: flex; gap: 20px; justify-content: center;">
+        <div style="
+            flex: 1;
+            padding: 15px;
+            border: 2px solid #FFD700;
+            border-radius: 10px;
+            background-color: #222222;
+            color: #FFD700;
+            font-family: 'Arial', sans-serif;
+            text-align: center;
+        ">
+            <div style="font-size: 14px; color: #aaa;">SERVER UPTIME</div>
+            <div id="uptime_clock" style="font-size: 28px; font-weight: bold;">Loading...</div>
+        </div>
+
+        <div style="
+            flex: 1;
+            padding: 15px;
+            border: 2px solid #FF4500;
+            border-radius: 10px;
+            background-color: #222222;
+            color: #FF4500;
+            font-family: 'Arial', sans-serif;
+            text-align: center;
+        ">
+            <div style="font-size: 14px; color: #aaa;">COUNTDOWN (5 MINS)</div>
+            <div id="countdown_clock" style="font-size: 28px; font-weight: bold;">05:00</div>
+            <div style="margin-top: 5px;">
+                <button onclick="startCountdown()" style="cursor:pointer; background:#FF4500; color:white; border:none; border-radius:3px; padding:2px 8px;">Start</button>
+                <button onclick="resetCountdown()" style="cursor:pointer; background:#555; color:white; border:none; border-radius:3px; padding:2px 8px;">Reset</button>
+            </div>
+        </div>
     </div>
+
     <script>
-        // Lấy số giây ban đầu từ Python
+        // --- LOGIC UPTIME ---
         let uptime = {initial_uptime_seconds};
-        
-        function updateTimer() {{
-            uptime += 1;
-            
-            // Quy đổi ra Giờ : Phút : Giây
-            let hours = Math.floor(uptime / 3600);
-            let minutes = Math.floor((uptime % 3600) / 60);
-            let seconds = Math.floor(uptime % 60);
-            
-            // Format số đẹp (01:05:09)
-            let str = 
-                (hours < 10 ? "0" + hours : hours) + ":" + 
-                (minutes < 10 ? "0" + minutes : minutes) + ":" + 
-                (seconds < 10 ? "0" + seconds : seconds);
-                
-            document.getElementById("uptime_clock").innerText = str;
+        function formatTime(s) {{
+            let h = Math.floor(s / 3600);
+            let m = Math.floor((s % 3600) / 60);
+            let sc = Math.floor(s % 60);
+            return (h < 10 ? "0"+h : h) + ":" + (m < 10 ? "0"+m : m) + ":" + (sc < 10 ? "0"+sc : sc);
         }}
+        setInterval(() => {{
+            uptime += 1;
+            document.getElementById("uptime_clock").innerText = formatTime(uptime);
+        }}, 1000);
+
+        // --- LOGIC COUNTDOWN ---
+        let countdownTime = 300; // 5 minutes
+        let countdownInterval = null;
         
-        // Gọi hàm mỗi 1000ms (1 giây)
-        setInterval(updateTimer, 1000);
-        updateTimer();
+        function updateCountdownDisplay() {{
+            let m = Math.floor(countdownTime / 60);
+            let s = countdownTime % 60;
+            document.getElementById("countdown_clock").innerText = 
+                (m < 10 ? "0"+m : m) + ":" + (s < 10 ? "0"+s : s);
+        }}
+
+        function startCountdown() {{
+            if (countdownInterval) return; // Prevent multiple clicks
+            countdownInterval = setInterval(() => {{
+                if (countdownTime > 0) {{
+                    countdownTime--;
+                    updateCountdownDisplay();
+                }} else {{
+                    clearInterval(countdownInterval);
+                    document.getElementById("countdown_clock").innerText = "HẾT GIỜ!";
+                }}
+            }}, 1000);
+        }}
+
+        function resetCountdown() {{
+            clearInterval(countdownInterval);
+            countdownInterval = null;
+            countdownTime = 300;
+            updateCountdownDisplay();
+        }}
     </script>
     """
-    components.html(timer_html, height=100)
+    components.html(dashboard_html, height=150)
     # ----------------------------------------------------
 
     if st.session_state.user_info:
@@ -339,7 +392,7 @@ if st.session_state.is_admin:
                 st.markdown("### 🏆 Winner List")
                 if len(list_winners)>0: st.dataframe(list_winners, use_container_width=True)
             with c2:
-                st.markdown("### 💀 Loser List")
+                st.markdown("### 💀 Loser List (Đã bị Block)")
                 if len(list_losers)>0: st.dataframe(list_losers, use_container_width=True)
                 
             with st.expander("Show Full Logs"):
@@ -440,6 +493,7 @@ if prompt := st.chat_input("Đoán tên (Cần cả Họ Tên) hoặc hỏi gợ
         - KHÔNG tiết lộ tên thật trừ khi đã có token [[WIN]].
         - Hỗ trợ toán học về MSHS (chia hết, lớn hơn, nhỏ hơn...).
         - Gợi ý tên: Số chữ cái, chữ cái đầu.
+        - Nếu user không ghi đủ họ và tên thì nhắc nhở user
         """
 
         messages_payload = [{"role": "system", "content": system_instruction}]
