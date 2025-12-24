@@ -20,18 +20,23 @@ FIXED_CSV_PATH = "res.csv"
 LOG_FILE_PATH = "game_logs.csv"  
 BACKGROUND_IMAGE_NAME = "background.jpg" 
 
-# DANH SÁCH VIP (ADMIN) - BẤT TỬ, RA VÀO TỰ DO
-ADMIN_IDS = ["250231", "250218", "admin"] # Thêm 'admin' để test cho dễ
+# DANH SÁCH ADMIN (ID)
+ADMIN_IDS = ["250231", "250218", "admin"] 
+
+# --- CẬP NHẬT LUẬT CHƠI TẠI ĐÂY ---
+MAX_QUESTIONS = 5  # Tăng lên 5 câu hỏi
+MAX_LIVES = 3      # Tăng lên 3 mạng
+GAME_DURATION = 300 # Thời gian chơi mỗi vòng (giây) = 5 phút
 
 FEMALE_NAMES = ["Khánh An", "Bảo Hân", "Lam Ngọc", "Phương Quỳnh", "Phương Nguyên", "Minh Thư"]
 
 st.set_page_config(page_title="Secret Santa Festive", page_icon="🎄", layout="centered")
 
-# --- QUẢN LÝ TRẠNG THÁI GAME TOÀN SERVER (QUAN TRỌNG) ---
+# --- TRẠNG THÁI GAME TOÀN SERVER ---
 class SharedGameState:
     def __init__(self):
-        # status: "WAITING", "RUNNING", "ENDED"
-        self.status = "WAITING" 
+        self.status = "WAITING"     # WAITING, RUNNING, ENDED
+        self.end_timestamp = 0.0    # Thời điểm kết thúc (Unix timestamp)
 
 @st.cache_resource
 def get_shared_state():
@@ -40,7 +45,7 @@ def get_shared_state():
 shared_state = get_shared_state()
 
 # ==============================================================================
-# 2. UTILS & HÀM HỖ TRỢ
+# 2. UTILS
 # ==============================================================================
 @st.cache_resource
 def get_server_start_time():
@@ -112,7 +117,7 @@ st.markdown(page_bg_img, unsafe_allow_html=True)
 st.markdown("""
 <style>
     .main .block-container { background-color: rgba(0, 0, 0, 0.85) !important; padding: 30px !important; border-radius: 25px; border: 2px solid #FFD700; max-width: 800px; }
-    h1 { color: #FFD700 !important; text-shadow: 2px 2px 4px #000; font-family: 'Arial Black', sans-serif; text-align: center; }
+    h1 { color: #FFD700 !important; font-family: 'Arial Black', sans-serif; text-align: center; }
     h2, h3, p, label, span { color: #FFFFFF !important; }
     div[data-testid="user-message"] { background-color: #FFFFFF !important; color: #004d00 !important; border-radius: 15px 15px 0px 15px !important; padding: 15px !important; font-weight: bold; }
     div[data-testid="assistant-message"] { background-color: #FFFFFF !important; color: #8b0000 !important; border-radius: 15px 15px 15px 0px !important; padding: 15px !important; font-weight: bold; }
@@ -121,6 +126,21 @@ st.markdown("""
     .stTextInput input { background-color: #FFFFFF !important; color: #000000 !important; font-weight: bold !important; }
     [data-testid="stSidebar"] h1, [data-testid="stSidebar"] p { color: #FFD700 !important; }
     #MainMenu, footer, header {visibility: hidden;}
+    
+    /* COUNTDOWN STYLE */
+    .countdown-box {
+        background-color: #222; 
+        color: #FF4500; 
+        padding: 10px; 
+        border-radius: 10px; 
+        text-align: center; 
+        font-size: 24px; 
+        font-weight: bold; 
+        border: 2px solid #FF4500;
+        margin-bottom: 20px;
+        animation: pulse 1s infinite;
+    }
+    @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255, 69, 0, 0.7); } 70% { box-shadow: 0 0 10px 10px rgba(255, 69, 0, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 69, 0, 0); } }
 </style>
 """, unsafe_allow_html=True)
 
@@ -133,7 +153,6 @@ if "is_admin" not in st.session_state: st.session_state.is_admin = False
 if "question_count" not in st.session_state: st.session_state.question_count = 0 
 if "wrong_guesses" not in st.session_state: st.session_state.wrong_guesses = 0  
 if "game_status" not in st.session_state: st.session_state.game_status = "PLAYING"
-if "start_time" not in st.session_state: st.session_state.start_time = None
 
 # ==============================================================================
 # 5. MÀN HÌNH ĐĂNG NHẬP
@@ -141,22 +160,19 @@ if "start_time" not in st.session_state: st.session_state.start_time = None
 if st.session_state.user_info is None and not st.session_state.is_admin:
     st.title("🎅 CỔNG ĐĂNG NHẬP")
     
-    # --- HIỂN THỊ TRẠNG THÁI SERVER ---
+    # STATUS INDICATOR
     if shared_state.status == "WAITING":
-        st.info("⏳ TRÒ CHƠI CHƯA BẮT ĐẦU. VUI LÒNG CHỜ HIỆU LỆNH TỪ ADMIN.")
+        st.info("⏳ GAME CHƯA BẮT ĐẦU. VUI LÒNG CHỜ ADMIN.")
     elif shared_state.status == "ENDED":
-        st.error("🛑 TRÒ CHƠI ĐÃ KẾT THÚC.")
+        st.error("🛑 GAME ĐÃ KẾT THÚC.")
     else:
-        st.success("🟢 TRÒ CHƠI ĐANG DIỄN RA! VÀO NGAY!")
+        st.success("🟢 CỔNG ĐANG MỞ! VÀO NGAY!")
 
     profiles = load_data(FIXED_CSV_PATH)
 
     with st.form("login_form"):
-        st.markdown("**Nhập thông tin của bạn:**")
         user_input = st.text_input("Mã số học sinh (hoặc Tên):", placeholder="Ví dụ: 250231...")
-        submitted = st.form_submit_button("🚀 BẮT ĐẦU CHƠI NGAY", type="primary")
-
-        if submitted and user_input:
+        if st.form_submit_button("🚀 BẮT ĐẦU CHƠI", type="primary"):
             query = user_input.strip()
             matches = [p for p in profiles if query.lower() in p['search_key'] or query in p['user_id']]
             
@@ -164,133 +180,102 @@ if st.session_state.user_info is None and not st.session_state.is_admin:
                 selected_user = matches[0]
                 is_admin_user = selected_user['user_id'] in ADMIN_IDS
                 
-                # --- LOGIC KIỂM SOÁT RA VÀO ---
-                # 1. Nếu là Admin: Vào luôn, không quan tâm trạng thái game
-                # 2. Nếu là User thường: Phải check trạng thái game
-                
-                allow_entry = False
-                
-                if is_admin_user:
-                    allow_entry = True
-                else:
-                    if shared_state.status == "WAITING":
-                        st.warning("🚧 Admin chưa mở cổng trò chơi. Vui lòng quay lại sau.")
-                    elif shared_state.status == "ENDED":
-                        st.error("🏁 Trò chơi đã kết thúc. Hẹn gặp lại mùa sau!")
-                    else:
-                        allow_entry = True
+                # --- CHECK QUYỀN VÀO ---
+                allow_entry = True
+                if not is_admin_user:
+                    if shared_state.status != "RUNNING": allow_entry = False
 
                 if allow_entry:
                     has_lost = check_if_lost(selected_user['user_name'])
                     if not is_admin_user and has_lost:
-                        st.error(f"🚫 {selected_user['user_name']} ơi, bạn đã thua rồi! Không thể đăng nhập lại.")
+                        st.error("🚫 Bạn đã thua rồi!")
                     else:
                         st.session_state.user_info = selected_user
                         st.session_state.question_count = 0
                         st.session_state.wrong_guesses = 0
                         st.session_state.game_status = "PLAYING"
                         st.session_state.messages = []
-                        st.session_state.start_time = time.time()
                         
                         if not has_lost: log_activity(selected_user['user_name'], "Login")
                         
-                        welcome_msg = f"Ho Ho Ho! Chào **{selected_user['user_name']}**! 🎅\n\n- Con có **3 câu hỏi** và **2 mạng**.\n- Đoán đúng **HỌ VÀ TÊN** để thắng.\n- Chúc may mắn!"
+                        # --- CẬP NHẬT TEXT CHÀO MỪNG VỚI LUẬT MỚI ---
+                        welcome_msg = f"Chào **{selected_user['user_name']}**! 🎅\n\nLuật mới:\n- ❓ **{MAX_QUESTIONS} câu hỏi**.\n- ❤️ **{MAX_LIVES} mạng**.\n- ⏳ **Đồng hồ đếm ngược** bên trên!\nChúc may mắn!"
                         st.session_state.messages.append({"role": "assistant", "content": welcome_msg})
                         st.rerun()
+                else:
+                    if shared_state.status == "WAITING": st.warning("Game chưa bắt đầu.")
+                    else: st.error("Game đã kết thúc.")
 
-            elif len(matches) > 1:
-                st.warning("⚠️ Có nhiều người trùng tên, vui lòng nhập MSHS.")
-            else:
-                st.error("❌ Không tìm thấy tên trong danh sách.")
+            elif len(matches) > 1: st.warning("⚠️ Trùng tên, nhập MSHS.")
+            else: st.error("❌ Không tìm thấy.")
     st.stop()
 
 # ==============================================================================
-# 6. MÀN HÌNH ADMIN (CONTROL PANEL)
+# 6. MÀN HÌNH ADMIN
 # ==============================================================================
 if st.session_state.is_admin:
-    st.title("🛡️ TRUNG TÂM CHỈ HUY (ADMIN)")
+    st.title("🛡️ ADMIN PANEL")
     
-    # --- ĐIỀU KHIỂN TRẠNG THÁI GAME ---
-    st.markdown("### 🕹️ ĐIỀU KHIỂN SERVER")
+    st.write(f"Trạng thái: **{shared_state.status}**")
     
-    status_color = "orange" if shared_state.status == "WAITING" else ("green" if shared_state.status == "RUNNING" else "red")
-    st.markdown(f"TRẠNG THÁI HIỆN TẠI: **:{status_color}[{shared_state.status}]**")
-    
-    col_a, col_b = st.columns(2)
-    with col_a:
-        if st.button("▶️ MỞ CỔNG TRÒ CHƠI (START)", type="primary", use_container_width=True):
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        if st.button("▶️ START (5 PHÚT)", type="primary", use_container_width=True):
             shared_state.status = "RUNNING"
+            shared_state.end_timestamp = time.time() + GAME_DURATION # Set thời gian kết thúc
             st.rerun()
-    with col_b:
-        if st.button("🛑 ĐÓNG CỔNG TRÒ CHƠI (END)", type="primary", use_container_width=True):
+    with c2:
+        if st.button("🛑 KẾT THÚC NGAY", type="primary", use_container_width=True):
             shared_state.status = "ENDED"
+            shared_state.end_timestamp = time.time() - 1 # Trick để countdown về 0 ngay
             st.rerun()
-            
-    st.divider()
+    with c3:
+        if st.button("⏹️ RESET STATUS", use_container_width=True):
+            shared_state.status = "WAITING"
+            shared_state.end_timestamp = 0
+            st.rerun()
 
-    initial_uptime_seconds = (datetime.datetime.now() - SERVER_START_TIME).total_seconds()
-    
-    # DASHBOARD HTML (Giữ nguyên countdown của bạn)
-    dashboard_html = f"""
-    <div style="display: flex; gap: 20px; justify-content: center;">
-        <div style="flex: 1; padding: 15px; border: 2px solid #FFD700; border-radius: 10px; background-color: #222; color: #FFD700; text-align: center;">
-            <div style="font-size: 14px; color: #aaa;">SERVER UPTIME</div>
-            <div id="uptime_clock" style="font-size: 28px; font-weight: bold;">Loading...</div>
-        </div>
-        <div style="flex: 1; padding: 15px; border: 2px solid #FF4500; border-radius: 10px; background-color: #222; color: #FF4500; text-align: center;">
-            <div style="font-size: 14px; color: #aaa;">COUNTDOWN (5 MINS)</div>
-            <div id="countdown_clock" style="font-size: 28px; font-weight: bold;">05:00</div>
-            <div style="margin-top: 5px;">
-                <button onclick="startCountdown()" style="cursor:pointer; background:#FF4500; color:white; border:none; border-radius:3px; padding:2px 8px;">Start</button>
-                <button onclick="resetCountdown()" style="cursor:pointer; background:#555; color:white; border:none; border-radius:3px; padding:2px 8px;">Reset</button>
-            </div>
-        </div>
-    </div>
-    <script>
-        let uptime = {initial_uptime_seconds};
-        function formatTime(s) {{ let h=Math.floor(s/3600); let m=Math.floor((s%3600)/60); let sc=Math.floor(s%60); return (h<10?"0"+h:h)+":"+(m<10?"0"+m:m)+":"+(sc<10?"0"+sc:sc); }}
-        setInterval(()=>{{ uptime+=1; document.getElementById("uptime_clock").innerText=formatTime(uptime); }}, 1000);
-        
-        let countdownTime=300; let countdownInterval=null;
-        function updateDisplay(){{ let m=Math.floor(countdownTime/60); let s=countdownTime%60; document.getElementById("countdown_clock").innerText=(m<10?"0"+m:m)+":"+(s<10?"0"+s:s); }}
-        function startCountdown(){{ if(countdownInterval)return; countdownInterval=setInterval(()=>{{ if(countdownTime>0){{countdownTime--;updateDisplay();}}else{{clearInterval(countdownInterval);document.getElementById("countdown_clock").innerText="HẾT GIỜ!";}} }},1000); }}
-        function resetCountdown(){{ clearInterval(countdownInterval); countdownInterval=null; countdownTime=300; updateDisplay(); }}
-    </script>
-    """
-    components.html(dashboard_html, height=150)
+    # Admin Dashboard Countdown
+    if shared_state.end_timestamp > 0:
+        remain = max(0, int(shared_state.end_timestamp - time.time()))
+        mins, secs = divmod(remain, 60)
+        st.metric("Thời gian còn lại của Server", f"{mins:02d}:{secs:02d}")
 
-    if st.button("⬅️ QUAY LẠI GAME (ADMIN MODE)"):
+    if st.button("⬅️ VỀ GAME"):
         st.session_state.is_admin = False
         st.rerun()
 
-    # --- LOG VIEWING ---
     if os.path.exists(LOG_FILE_PATH):
         df_log = pd.read_csv(LOG_FILE_PATH)
-        if 'Hành động' in df_log.columns:
-            st.write("---")
-            col1, col2 = st.columns(2)
-            col1.metric("🏆 WINNERS", len(df_log[df_log['Hành động']=='WIN']['Người chơi'].unique()))
-            col2.metric("💀 LOSERS", len(df_log[df_log['Hành động']=='GAME OVER']['Người chơi'].unique()))
-            
-            with st.expander("Xem chi tiết Logs"):
-                st.dataframe(df_log.sort_values(by="Thời gian", ascending=False), use_container_width=True)
-            
-            if st.button("🗑️ XÓA LOGS", type="secondary"):
-                 os.remove(LOG_FILE_PATH)
-                 st.rerun()
+        st.dataframe(df_log.sort_values(by="Thời gian", ascending=False), use_container_width=True)
+        if st.button("Xóa Log"): 
+            os.remove(LOG_FILE_PATH)
+            st.rerun()
     st.stop()
 
 # ==============================================================================
-# 7. MÀN HÌNH GAME CHÍNH (USER)
+# 7. MAIN GAME (USER)
 # ==============================================================================
 user = st.session_state.user_info
-
-# --- BẢO VỆ LAYER 2: NẾU GAME ĐANG CHƠI MÀ ADMIN BẤM DỪNG ĐỘT NGỘT ---
-# Nếu không phải Admin và Trạng thái game != RUNNING -> Đá văng ra ngoài
 is_vip = user['user_id'] in ADMIN_IDS
+
+# --- CHECK GAME ENDED ---
+# Nếu hết giờ (dựa trên timestamp toàn cục) -> Đổi status thành ENDED (logic hiển thị)
+current_time = time.time()
+remaining_seconds = 0
+if shared_state.status == "RUNNING":
+    remaining_seconds = shared_state.end_timestamp - current_time
+    if remaining_seconds <= 0:
+        if not is_vip:
+            st.error("🛑 HẾT GIỜ! GAME ĐÃ KẾT THÚC.")
+            st.stop()
+        else:
+             st.warning("⚠️ Admin Mode: Đã hết giờ thực tế.")
+
+# Nếu admin bấm STOP -> User bị đá ra
 if not is_vip and shared_state.status != "RUNNING":
-    st.error("🛑 ADMIN ĐÃ ĐÓNG CỔNG TRÒ CHƠI HOẶC TRÒ CHƠI CHƯA BẮT ĐẦU.")
-    if st.button("Quay về màn hình chính"):
+    st.error("🛑 ADMIN ĐÃ ĐÓNG CỔNG.")
+    if st.button("Thoát"):
         st.session_state.user_info = None
         st.rerun()
     st.stop()
@@ -298,26 +283,54 @@ if not is_vip and shared_state.status != "RUNNING":
 target_gender = get_gender(user['santa_name'])
 st.title("🎁 PHÒNG THẨM VẤN")
 
-elapsed_str = "00:00"
-if st.session_state.start_time:
-    elapsed = int(time.time() - st.session_state.start_time)
-    mins, secs = divmod(elapsed, 60)
-    elapsed_str = f"{mins:02d}:{secs:02d}"
+# --- REAL-TIME USER COUNTDOWN (JS) ---
+# Truyền timestamp kết thúc xuống JS để nó tự đếm ngược
+end_ts_js = shared_state.end_timestamp
+countdown_html = f"""
+<div id="countdown_display" class="countdown-box" style="
+    background-color: #222; color: #FF4500; padding: 15px; 
+    border-radius: 10px; text-align: center; font-size: 30px; 
+    font-weight: bold; border: 2px solid #FF4500; margin-bottom: 20px;
+    font-family: monospace;">
+    Loading...
+</div>
+<script>
+    var endTimestamp = {end_ts_js};
+    
+    function updateCountdown() {{
+        var now = Date.now() / 1000;
+        var diff = endTimestamp - now;
+        
+        if (diff <= 0) {{
+            document.getElementById("countdown_display").innerHTML = "🛑 HẾT GIỜ!";
+            document.getElementById("countdown_display").style.color = "red";
+            return;
+        }}
+        
+        var minutes = Math.floor(diff / 60);
+        var seconds = Math.floor(diff % 60);
+        
+        var displayStr = (minutes < 10 ? "0" + minutes : minutes) + ":" + (seconds < 10 ? "0" + seconds : seconds);
+        document.getElementById("countdown_display").innerHTML = "⏳ " + displayStr;
+    }}
+    
+    setInterval(updateCountdown, 1000);
+    updateCountdown();
+</script>
+"""
+components.html(countdown_html, height=100)
 
-c1, c2, c3 = st.columns(3)
-c1.metric("❓ GỢI Ý", f"{max(0, 3 - st.session_state.question_count)} / 3")
-c2.metric("❤️ MẠNG", f"{2 - st.session_state.wrong_guesses}")
-c3.metric("⏳ THỜI GIAN", elapsed_str)
+# --- METRICS CẬP NHẬT: 5 CÂU - 3 MẠNG ---
+c1, c2 = st.columns(2)
+c1.metric("❓ GỢI Ý CÒN LẠI", f"{max(0, MAX_QUESTIONS - st.session_state.question_count)} / {MAX_QUESTIONS}")
+c2.metric("❤️ MẠNG SỐNG", f"{MAX_LIVES - st.session_state.wrong_guesses} / {MAX_LIVES}")
 
 with st.sidebar:
     st.title(f"👤 {user['user_name']}")
-    
-    # Chỉ Admin mới thấy nút này
     if user['user_id'] in ADMIN_IDS:
         if st.button("🛡️ VÀO ADMIN", type="primary"):
             st.session_state.is_admin = True
             st.rerun()
-            
     if st.button("Đăng xuất"):
          st.session_state.user_info = None
          st.rerun()
@@ -336,23 +349,24 @@ if st.session_state.game_status == "WON":
     st.success(f"🎉 BẠN ĐÃ THẮNG! SECRET SANTA LÀ: {user['santa_name']}")
     st.stop()
 
-if prompt := st.chat_input("Đoán tên (Cần cả Họ Tên) hoặc hỏi gợi ý..."):
+# --- INPUT & AI LOGIC ---
+if prompt := st.chat_input("Đoán tên hoặc hỏi gợi ý..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"): st.markdown(prompt)
 
     try:
         client = Groq(api_key=FIXED_GROQ_API_KEY)
+        
+        # SYSTEM PROMPT CẬP NHẬT 5 CÂU / 3 MẠNG
         system_instruction = f"""
         Bạn là AI Quản trò (mã NPLM). User: {user['user_name']}. Santa: {user['santa_name']} ({target_gender}, MSHS: {user['santa_id']}).
-        Status: Hỏi {st.session_state.question_count}/3. Sai {st.session_state.wrong_guesses}/2.
+        Status: Hỏi {st.session_state.question_count}/{MAX_QUESTIONS}. Sai {st.session_state.wrong_guesses}/{MAX_LIVES}.
         
         RULES:
-        1. [[WIN]]: Nếu đoán ĐÚNG CẢ HỌ TÊN Santa.
-        2. [[WRONG]]: Nếu đoán tên cụ thể mà SAI.
-        3. [[OK]]: Nếu hỏi gợi ý hợp lệ (MSHS, giới tính...). Nếu hết lượt gợi ý -> Từ chối.
+        1. [[WIN]]: Đoán ĐÚNG CẢ HỌ TÊN.
+        2. [[WRONG]]: Đoán tên SAI.
+        3. [[OK]]: Hỏi gợi ý hợp lệ. Nếu user đã hỏi {MAX_QUESTIONS} câu -> Từ chối, bắt đoán tên.
         4. [[CHAT]]: Chat xã giao.
-        
-        Không tiết lộ tên thật trừ khi [[WIN]].
         """
 
         messages_payload = [{"role": "system", "content": system_instruction}]
@@ -381,13 +395,15 @@ if prompt := st.chat_input("Đoán tên (Cần cả Họ Tên) hoặc hỏi gợ
                 st.session_state.wrong_guesses += 1
                 log_activity(user['user_name'], "Guess Wrong")
                 final_content = full_res.replace("[[WRONG]]", "")
-                if st.session_state.wrong_guesses >= 2:
+                # CHECK MẠNG: >= MAX_LIVES
+                if st.session_state.wrong_guesses >= MAX_LIVES:
                     st.session_state.game_status = "LOST"
                     log_activity(user['user_name'], "GAME OVER")
                     action = "LOST"
                 else: action = "WRONG"
             elif "[[OK]]" in full_res:
-                if st.session_state.question_count < 3:
+                # CHECK CÂU HỎI: < MAX_QUESTIONS
+                if st.session_state.question_count < MAX_QUESTIONS:
                     st.session_state.question_count += 1
                     final_content = full_res.replace("[[OK]]", "")
                     action = "OK"
