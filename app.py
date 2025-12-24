@@ -320,4 +320,216 @@ if st.session_state.is_admin:
 
     st.divider()
     if st.session_state.user_info:
-        if st.button("⬅️ QUAY LẠ
+        if st.button("⬅️ QUAY LẠI CHẾ ĐỘ NGƯỜI CHƠI"):
+            st.session_state.is_admin = False
+            st.rerun()
+    else:
+        if st.button("⬅️ THOÁT ADMIN"):
+            st.session_state.is_admin = False
+            st.rerun()
+    st.stop()
+
+# ==============================================================================
+# 7. MÀN HÌNH GAME CHÍNH (NGƯỜI CHƠI)
+# ==============================================================================
+user = st.session_state.user_info
+target_gender = get_gender(user['santa_name'])
+
+# --- LẤY THÔNG TIN THỜI GIAN TỪ FILE CONFIG ---
+game_config = get_game_config()
+end_timestamp = game_config["end_time_epoch"]
+is_active_game = game_config["is_active"]
+
+st.title("🎁PHÒNG THẨM VẤN ÔNG GIÀ NOEL")
+
+# --- CHECK GAME ACTIVE ---
+if not is_active_game:
+    st.error("🛑 TRÒ CHƠI ĐÃ TẠM DỪNG BỞI ADMIN!")
+    st.stop()
+
+# --- REAL-TIME COUNTDOWN COMPONENT (JS) ---
+# Đoạn này sẽ render một đồng hồ đếm ngược bằng JS, tự động tính toán dựa trên end_timestamp
+timer_html = f"""
+<div style="
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background-color: #222; border: 2px solid #FF4500; border-radius: 10px;
+    padding: 5px; width: 100%; height: 100%;
+">
+    <div style="color: #aaa; font-size: 12px; font-family: sans-serif;">THỜI GIAN CÒN LẠI</div>
+    <div id="countdown" style="color: #FF4500; font-size: 24px; font-weight: bold; font-family: monospace;">
+        Loading...
+    </div>
+</div>
+
+<script>
+    var countDownDate = {end_timestamp} * 1000;
+    
+    var x = setInterval(function() {{
+        var now = new Date().getTime();
+        var distance = countDownDate - now;
+        
+        if (distance < 0) {{
+            document.getElementById("countdown").innerHTML = "HẾT GIỜ";
+            document.getElementById("countdown").style.color = "red";
+        }} else {{
+            var minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+            var seconds = Math.floor((distance % (1000 * 60)) / 1000);
+            
+            // Thêm số 0 đằng trước nếu < 10
+            minutes = minutes < 10 ? "0" + minutes : minutes;
+            seconds = seconds < 10 ? "0" + seconds : seconds;
+            
+            document.getElementById("countdown").innerHTML = minutes + ":" + seconds;
+        }}
+    }}, 1000);
+</script>
+"""
+
+# --- Metrics Bar ---
+c1, c2, c3 = st.columns([1, 1, 1.5]) # Cột 3 rộng hơn để chứa Timer
+c1.metric("❓ GỢI Ý", f"{max(0, 3 - st.session_state.question_count)} / 3")
+c2.metric("❤️ MẠNG", f"{2 - st.session_state.wrong_guesses}")
+
+with c3:
+    # Nhúng timer HTML vào vị trí metric thứ 3
+    components.html(timer_html, height=85)
+
+# --- Sidebar ---
+with st.sidebar:
+    st.title(f"👤 {user['user_name']}")
+    st.caption(f"ID: {user['user_id']}")
+    st.divider()
+    
+    # Nút Admin cho Admin
+    if user['user_id'] in ADMIN_IDS:
+        if st.button("🛡️ VÀO CONTROL CENTER", type="primary"):
+            st.session_state.is_admin = True
+            st.rerun()
+            
+    if st.button("Đăng xuất"):
+         st.session_state.user_info = None
+         st.session_state.messages = []
+         st.rerun()
+
+# --- Hiển thị Chat ---
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
+
+# --- Kiểm tra trạng thái kết thúc ---
+# 1. Kiểm tra hết giờ (Phía server)
+if time.time() > end_timestamp:
+    st.error("⏰ HẾT GIỜ RỒI! BẠN ĐÃ KHÔNG KỊP ĐOÁN RA.")
+    st.stop()
+
+# 2. Kiểm tra thắng thua logic game
+if st.session_state.game_status == "LOST":
+    st.error("☠️ GAME OVER! HẾT QUÀ RỒI! ☠️")
+    st.info(f"Đáp án đúng là: {user['santa_name']}")
+    st.stop()
+
+if st.session_state.game_status == "WON":
+    st.balloons()
+    st.snow()
+    st.success(f"🎉 CHÚC MỪNG! SECRET SANTA LÀ: {user['santa_name']} 🎉")
+    st.stop()
+
+# --- Xử lý Input & Logic AI ---
+if prompt := st.chat_input("Đoán tên (Cần cả Họ Tên) hoặc hỏi gợi ý..."):
+    
+    # User Message
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    try:
+        client = Groq(api_key=FIXED_GROQ_API_KEY)
+        
+        # LOGIC PROMPT CHO AI
+        system_instruction = f"""
+        Bạn là AI Quản trò Secret Santa (tên mã NPLM). Tính cách: Lạnh lùng, hơi châm biếm, nhưng công bằng.
+        
+        DỮ LIỆU BÍ MẬT:
+        - Người chơi (User): {user['user_name']}
+        - Kẻ Bí Mật (Santa): {user['santa_name']} (Giới tính: {target_gender}, MSHS: {user['santa_id']})
+        - Trạng thái: Đã hỏi {st.session_state.question_count}/3. Sai {st.session_state.wrong_guesses}/2.
+        
+        QUY TẮC TUYỆT ĐỐI - BẠN PHẢI BẮT ĐẦU CÂU TRẢ LỜI BẰNG MỘT TRONG CÁC TOKEN SAU:
+
+        1. [[WIN]] : Nếu user đoán ĐÚNG CẢ HỌ VÀ TÊN của Kẻ Bí Mật. (Vd: "Là Nguyễn Văn A à" -> [[WIN]]).
+        2. [[WRONG]] : Nếu user cố tình đoán tên một người cụ thể nhưng SAI. (Vd: "Là Lê Thị B hả" -> [[WRONG]]).
+           - Kèm lời chế giễu nhẹ nhàng.
+        3. [[OK]] : Nếu user đặt câu hỏi gợi ý hợp lệ (Về giới tính, MSHS, tên đệm...).
+           - Nếu đã hỏi hết 3 câu -> KHÔNG dùng [[OK]], hãy từ chối và bảo họ đoán tên đi.
+           - Nếu hỏi về ngoại hình -> Từ chối (camera hỏng).
+        4. [[CHAT]] : Các câu chat xã giao thông thường, không đoán tên cũng không xin gợi ý.
+
+        Lưu ý:
+        - KHÔNG tiết lộ tên thật trừ khi đã có token [[WIN]].
+        - Hỗ trợ toán học về MSHS (chia hết, lớn hơn, nhỏ hơn...).
+        - Gợi ý tên: Số chữ cái, chữ cái đầu.
+        - Nếu user không ghi đủ họ và tên thì nhắc nhở user
+        """
+
+        messages_payload = [{"role": "system", "content": system_instruction}]
+        for m in st.session_state.messages[-6:]:
+            messages_payload.append({"role": m["role"], "content": m["content"]})
+
+        with st.chat_message("assistant"):
+            message_placeholder = st.empty()
+            full_response = ""
+            
+            completion = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=messages_payload,
+                temperature=0.3,
+                stream=True
+            )
+            
+            for chunk in completion:
+                if chunk.choices[0].delta.content:
+                    full_response += chunk.choices[0].delta.content
+                    clean_preview = full_response.replace("[[WIN]]", "").replace("[[WRONG]]", "").replace("[[OK]]", "").replace("[[CHAT]]", "")
+                    message_placeholder.markdown(clean_preview + "▌")
+            
+            # Xử lý Logic Game
+            final_content = full_response
+            status_update = None
+            
+            if "[[WIN]]" in full_response:
+                st.session_state.game_status = "WON"
+                log_activity(user['user_name'], "WIN")
+                final_content = full_response.replace("[[WIN]]", "")
+                status_update = "WIN"
+                
+            elif "[[WRONG]]" in full_response:
+                st.session_state.wrong_guesses += 1
+                log_activity(user['user_name'], "Guess Wrong")
+                final_content = full_response.replace("[[WRONG]]", "")
+                if st.session_state.wrong_guesses >= 2:
+                    st.session_state.game_status = "LOST"
+                    log_activity(user['user_name'], "GAME OVER")
+                    status_update = "LOST"
+                else:
+                    status_update = "WRONG"
+
+            elif "[[OK]]" in full_response:
+                if st.session_state.question_count < 3:
+                    st.session_state.question_count += 1
+                    final_content = full_response.replace("[[OK]]", "")
+                    status_update = "OK"
+                else:
+                    final_content = "Ngươi đã hết câu hỏi gợi ý rồi! Giờ chỉ được đoán tên thôi (Đoán sai là mất mạng đấy!)."
+            
+            else:
+                 final_content = full_response.replace("[[CHAT]]", "")
+
+            message_placeholder.markdown(final_content)
+            st.session_state.messages.append({"role": "assistant", "content": final_content})
+            
+            if status_update in ["WIN", "LOST", "WRONG", "OK"]:
+                time.sleep(1)
+                st.rerun()
+
+    except Exception as e:
+        st.error(f"Lỗi kết nối AI: {str(e)}")
