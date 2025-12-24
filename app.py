@@ -20,7 +20,7 @@ except:
 FIXED_CSV_PATH = "res.csv"
 LOG_FILE_PATH = "game_logs.csv"  
 CONFIG_FILE_PATH = "game_config.json" # FILE LƯU TRẠNG THÁI GAME TOÀN CỤC
-ADMIN_PASSWORD = "admin" 
+ADMIN_PASSWORD = ["250231", "250218", "admin"]
 BACKGROUND_IMAGE_NAME = "background.jpg" 
 
 # DANH SÁCH VIP (ADMIN)
@@ -533,3 +533,4 @@ if prompt := st.chat_input("Đoán tên (Cần cả Họ Tên) hoặc hỏi gợ
 
     except Exception as e:
         st.error(f"Lỗi kết nối AI: {str(e)}")
+
