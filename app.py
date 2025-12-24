@@ -19,10 +19,9 @@ except:
 
 FIXED_CSV_PATH = "res.csv"
 LOG_FILE_PATH = "game_logs.csv"  
-ADMIN_PASSWORD = "admin" 
 BACKGROUND_IMAGE_NAME = "background.jpg" 
 
-# DANH SÁCH VIP (ADMIN)
+# DANH SÁCH VIP (ADMIN) - NHỮNG ID NÀY SẼ RA VÀO THOẢI MÁI
 ADMIN_IDS = ["250231", "250218"]
 
 FEMALE_NAMES = [
@@ -227,36 +226,40 @@ if st.session_state.user_info is None and not st.session_state.is_admin:
         if submitted and user_input:
             query = user_input.strip()
             
-            # Admin Login
-            if query == ADMIN_PASSWORD:
-                st.session_state.is_admin = True
-                st.rerun()
+            # ĐÃ XÓA LOGIN BẰNG ID "admin" TẠI ĐÂY
 
-            # User Login
+            # User Login Check
             matches = [p for p in profiles if query.lower() in p['search_key'] or query in p['user_id']]
             
             if len(matches) == 1:
                 selected_user = matches[0]
                 
-                # --- CHECK XEM NGƯỜI NÀY ĐÃ THUA CHƯA ---
-                if check_if_lost(selected_user['user_name']):
+                # --- CHECK QUYỀN TRUY CẬP ---
+                is_vip = selected_user['user_id'] in ADMIN_IDS # Admin được miễn tử
+                has_lost = check_if_lost(selected_user['user_name'])
+                
+                # Nếu không phải VIP mà đã thua -> Chặn
+                if not is_vip and has_lost:
                     st.error(f"🚫 {selected_user['user_name']} ơi, bạn đã dùng hết mạng và thua cuộc rồi! Không thể đăng nhập lại.")
                 else:
                     st.session_state.user_info = selected_user
-                    # Reset trạng thái game
+                    
+                    # Reset game (Nếu là Admin, reset luôn để test lại từ đầu)
                     st.session_state.question_count = 0
                     st.session_state.wrong_guesses = 0
                     st.session_state.game_status = "PLAYING"
                     st.session_state.messages = []
-                    # Bắt đầu tính giờ cho User
                     st.session_state.start_time = time.time()
                     
-                    log_activity(selected_user['user_name'], "Login")
+                    # Chỉ log login nếu chưa thua (để tránh spam log admin)
+                    if not has_lost:
+                        log_activity(selected_user['user_name'], "Login")
                     
                     # Tin nhắn chào mừng
                     welcome_msg = f"Ho Ho Ho! Chào **{selected_user['user_name']}**! 🎅\nTa đang giữ bí mật về người tặng quà cho con.\n\nLuật chơi: Con có **3 câu hỏi** và **2 mạng**.\nLưu ý: Phải đoán đúng **HỌ VÀ TÊN** mới thắng nhé!"
                     st.session_state.messages.append({"role": "assistant", "content": welcome_msg})
                     st.rerun()
+
             elif len(matches) > 1:
                 st.warning("⚠️ Có nhiều người trùng tên, vui lòng nhập MSHS.")
             else:
@@ -364,13 +367,13 @@ if st.session_state.is_admin:
             st.session_state.is_admin = False
             st.rerun()
     else:
+        # Trường hợp này khó xảy ra vì đã bỏ login admin, nhưng cứ để
         if st.button("⬅️ THOÁT ADMIN", type="secondary"):
             st.session_state.is_admin = False
             st.rerun()
 
     if os.path.exists(LOG_FILE_PATH):
         df_log = pd.read_csv(LOG_FILE_PATH)
-        # Fix lỗi nếu file log trống hoặc lỗi format
         if 'Hành động' in df_log.columns and 'Người chơi' in df_log.columns:
             df_win = df_log[df_log['Hành động'] == 'WIN']
             list_winners = df_win['Người chơi'].unique()
@@ -392,7 +395,7 @@ if st.session_state.is_admin:
                 st.markdown("### 🏆 Winner List")
                 if len(list_winners)>0: st.dataframe(list_winners, use_container_width=True)
             with c2:
-                st.markdown("### 💀 Loser List (Đã bị Block)")
+                st.markdown("### 💀 Loser List (Blocked)")
                 if len(list_losers)>0: st.dataframe(list_losers, use_container_width=True)
                 
             with st.expander("Show Full Logs"):
@@ -431,6 +434,7 @@ with st.sidebar:
     st.caption(f"Trạng thái: {st.session_state.game_status}")
     st.divider()
     
+    # Nút vào Admin chỉ hiện nếu User ID nằm trong danh sách VIP
     if user['user_id'] in ADMIN_IDS:
         if st.button("🛡️ VÀO ADMIN", type="primary"):
             st.session_state.is_admin = True
