@@ -511,10 +511,11 @@ if prompt := st.chat_input("Nhập câu hỏi gợi ý hoặc đoán tên..."):
            - Nếu đã hỏi hết 3 câu -> KHÔNG dùng [[OK]], hãy từ chối và bảo họ đoán tên đi.
            - Nếu hỏi về ngoại hình -> Từ chối (camera hỏng).
         4. [[CHAT]] : Các câu chat xã giao thông thường, không đoán tên cũng không xin gợi ý.
+            -Nếu user hỏi về mã số học sinh không tiết lộ số cụ thể chỉ nói lớn hơn hay bé hơn mã số học sinh của user.
 
         Lưu ý:
         - KHÔNG tiết lộ tên thật và mshs (mã số học sinh) trừ khi đã có token [[WIN]].
-        - Hỗ trợ toán học về MSHS (chia hết, lớn hơn, nhỏ hơn...).
+        - Hỗ trợ toán học về MSHS (chia hết, lớn hơn, nhỏ hơn...) không tiết lộ số cụ thể.
         - Gợi ý tên: Số chữ cái, chữ cái đầu.
         - Nếu user không ghi đủ họ và tên thì nhắc nhở user.
         - Làm cho trò chơi càng khó càng tốt.
@@ -567,4 +568,5 @@ if prompt := st.chat_input("Nhập câu hỏi gợi ý hoặc đoán tên..."):
                 st.rerun()
 
     except Exception as e: st.error(f"Lỗi: {e}")
+
 
