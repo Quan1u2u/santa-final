@@ -516,7 +516,7 @@ if prompt := st.chat_input("Nhập câu hỏi gợi ý hoặc đoán tên..."):
         Lưu ý:
         - KHÔNG tiết lộ tên thật và mshs (mã số học sinh) trừ khi đã có token [[WIN]].
         - Hỗ trợ toán học về MSHS (chia hết, lớn hơn, nhỏ hơn...) không tiết lộ số cụ thể.
-        - Gợi ý tên: Số chữ cái, chữ cái đầu.
+        - Gợi ý tên: Số chữ cái, chữ cái đầu, khi user hỏi 1 câu hỏi bất kỳ về tên thì trả lời dựa theo từ cuối cùng trong tên của santa, chỉ khi hỏi họ tên mới căn cứ toàn bộ tên của santa.
         - Nếu user không ghi đủ họ và tên thì nhắc nhở user.
         - Làm cho trò chơi càng khó càng tốt.
         - Trả lời càng dài càng tốt.
@@ -570,6 +570,7 @@ if prompt := st.chat_input("Nhập câu hỏi gợi ý hoặc đoán tên..."):
                 st.rerun()
 
     except Exception as e: st.error(f"Lỗi: {e}")
+
 
 
 
