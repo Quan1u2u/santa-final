@@ -16,7 +16,7 @@ try:
     FIXED_GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 except:
     # Key dự phòng nếu không có secret
-    FIXED_GROQ_API_KEY = "gsk_YOUR_API_KEY_HERE"
+    FIXED_GROQ_API_KEY = "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"
 
 FIXED_CSV_PATH = "res.csv"
 LOG_FILE_PATH = "game_logs.csv"
@@ -636,3 +636,4 @@ if prompt := st.chat_input("Nhập câu hỏi gợi ý hoặc đoán tên..."):
                 st.rerun()
 
     except Exception as e: st.error(f"Lỗi: {e}")
+
