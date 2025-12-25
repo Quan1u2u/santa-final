@@ -25,7 +25,7 @@ VIP_FILE_PATH = "vip_users.json"      # File lưu danh sách VIP
 BACKGROUND_IMAGE_NAME = "background.jpg"
 
 # DANH SÁCH ADMIN (ID)
-ADMIN_IDS = ["250231", "250218", "000000"]
+ADMIN_IDS = ["250231", "250218", "000000", "admin"]
 
 # --- LUẬT CHƠI (STANDARD vs VIP) ---
 STD_MAX_QUESTIONS = 3   # Thường: 3 câu
@@ -637,6 +637,7 @@ if prompt := st.chat_input("Nhập câu hỏi gợi ý hoặc đoán tên..."):
                 st.rerun()
 
     except Exception as e: st.error(f"Lỗi: {e}")
+
 
 
 
