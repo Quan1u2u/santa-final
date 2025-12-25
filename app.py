@@ -154,7 +154,7 @@ st.markdown("""
         padding: 30px !important; 
         border-radius: 25px; 
         border: 2px solid #FFD700; 
-        box-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+        box-shadow: 0 0 20px rgba(255, 215, 0, 0.8);
         max-width: 800px; 
     }
     
@@ -636,6 +636,7 @@ if prompt := st.chat_input("Nhập câu hỏi gợi ý hoặc đoán tên..."):
                 st.rerun()
 
     except Exception as e: st.error(f"Lỗi: {e}")
+
 
 
 
