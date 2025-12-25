@@ -7,7 +7,7 @@ import datetime
 import csv
 import time
 import base64
-import json  # Đã thêm thư viện json để đồng bộ Admin mới
+import json
 
 # ==============================================================================
 # 1. CẤU HÌNH & CONSTANTS
@@ -20,15 +20,20 @@ except:
 FIXED_CSV_PATH = "res.csv"
 LOG_FILE_PATH = "game_logs.csv"
 CONFIG_FILE_PATH = "game_config.json" # File để Admin điều khiển game toàn server
+VIP_FILE_PATH = "vip_users.json"      # File lưu danh sách VIP
 BACKGROUND_IMAGE_NAME = "background.jpg"
 
-# DANH SÁCH ADMIN (ID) - Bạn có thể cập nhật thêm
+# DANH SÁCH ADMIN (ID)
 ADMIN_IDS = ["250231", "250218", "admin"]
 
-# --- LUẬT CHƠI ---
-MAX_QUESTIONS = 5   # 5 Câu hỏi gợi ý
-MAX_LIVES = 3       # 3 Mạng
-DEFAULT_DURATION = 15 # Mặc định 15 phút nếu reset file
+# --- LUẬT CHƠI (STANDARD vs VIP) ---
+STD_MAX_QUESTIONS = 5   # Thường: 5 câu
+STD_MAX_LIVES = 3       # Thường: 3 mạng
+
+VIP_MAX_QUESTIONS = 10  # VIP: 10 câu
+VIP_MAX_LIVES = 5       # VIP: 5 mạng
+
+DEFAULT_DURATION = 15 
 
 FEMALE_NAMES = ["Khánh An", "Bảo Hân", "Lam Ngọc", "Phương Quỳnh", "Phương Nguyên", "Minh Thư"]
 
@@ -38,10 +43,27 @@ st.set_page_config(page_title="Secret Santa Festive", page_icon="🎄", layout="
 # 2. UTILS (HÀM HỖ TRỢ)
 # ==============================================================================
 
-# --- LOGIC QUẢN LÝ TRẠNG THÁI GAME TỪ ADMIN MỚI ---
+# --- QUẢN LÝ VIP ---
+def get_vip_list():
+    if not os.path.exists(VIP_FILE_PATH):
+        return []
+    try:
+        with open(VIP_FILE_PATH, 'r') as f:
+            return json.load(f)
+    except:
+        return []
+
+def add_vip_user(mshs):
+    vips = get_vip_list()
+    if mshs not in vips:
+        vips.append(str(mshs).strip())
+        with open(VIP_FILE_PATH, 'w') as f:
+            json.dump(vips, f)
+        return True
+    return False
+
+# --- LOGIC QUẢN LÝ TRẠNG THÁI GAME ---
 def get_game_config():
-    """Đọc cấu hình game (thời gian kết thúc) từ file JSON"""
-    # Nếu file chưa tồn tại, tạo mặc định là đang đóng
     if not os.path.exists(CONFIG_FILE_PATH):
         return {"end_time_epoch": 0, "is_active": False}
     try:
@@ -51,7 +73,6 @@ def get_game_config():
         return {"end_time_epoch": 0, "is_active": False}
 
 def set_game_duration(minutes):
-    """Admin set thời gian cho toàn bộ server"""
     end_time = time.time() + (minutes * 60)
     config = {"end_time_epoch": end_time, "is_active": True}
     with open(CONFIG_FILE_PATH, 'w') as f:
@@ -59,13 +80,11 @@ def set_game_duration(minutes):
     return end_time
 
 def stop_game():
-    """Admin dừng game ngay lập tức"""
     config = get_game_config()
     config["is_active"] = False
     with open(CONFIG_FILE_PATH, 'w') as f:
         json.dump(config, f)
 
-# --- CÁC HÀM XỬ LÝ KHÁC (GIỮ NGUYÊN TỪ CODE CŨ) ---
 def get_base64_of_bin_file(bin_file):
     try:
         with open(bin_file, 'rb') as f:
@@ -118,7 +137,7 @@ def load_data(filepath):
         return []
 
 # ==============================================================================
-# 3. CSS & GIAO DIỆN (GIỮ NGUYÊN TỪ CODE CŨ)
+# 3. CSS & GIAO DIỆN
 # ==============================================================================
 bin_str = get_base64_of_bin_file(BACKGROUND_IMAGE_NAME)
 if bin_str:
@@ -161,7 +180,7 @@ st.markdown("""
         background-color: #FFFFFF !important; 
         color: #000000 !important; 
         font-weight: bold !important; 
-        text-align: center !important; /* Căn giữa text lúc nhập */
+        text-align: center !important; 
     }
     
     /* CHAT BUBBLES */
@@ -202,6 +221,10 @@ if "is_admin" not in st.session_state: st.session_state.is_admin = False
 if "question_count" not in st.session_state: st.session_state.question_count = 0 
 if "wrong_guesses" not in st.session_state: st.session_state.wrong_guesses = 0  
 if "game_status" not in st.session_state: st.session_state.game_status = "PLAYING"
+# Thêm state cho limits
+if "current_max_q" not in st.session_state: st.session_state.current_max_q = STD_MAX_QUESTIONS
+if "current_max_l" not in st.session_state: st.session_state.current_max_l = STD_MAX_LIVES
+if "is_vip_user" not in st.session_state: st.session_state.is_vip_user = False
 
 # Lấy config hiện tại
 current_config = get_game_config()
@@ -216,7 +239,7 @@ if st.session_state.user_info is None and not st.session_state.is_admin:
     st.title("🎄 CỔNG GIÁNG SINH 🎄")
     st.markdown("<h3 style='color: #FFD700; margin-bottom: 20px;'>SECRET SANTA FESTIVE</h3>", unsafe_allow_html=True)
     
-    # STATUS CHECK (Dựa trên config JSON)
+    # STATUS CHECK
     if not is_game_active:
         st.info("⏳ CỔNG CHƯA MỞ HOẶC ĐÃ BỊ ADMIN ĐÓNG.")
     elif current_time > game_end_time:
@@ -228,7 +251,7 @@ if st.session_state.user_info is None and not st.session_state.is_admin:
 
     with st.form("login_form"):
         st.markdown("<div style='text-align: center; color: white;'>NHẬP DANH TÍNH CỦA BẠN</div>", unsafe_allow_html=True)
-        user_input = st.text_input("", placeholder="Mã số học sinh hoặc Tên...") # Label rỗng để đẹp hơn
+        user_input = st.text_input("", placeholder="Mã số học sinh hoặc Tên...") 
         
         submitted = st.form_submit_button("🚀 BƯỚC VÀO THẾ GIỚI", type="primary")
 
@@ -240,7 +263,11 @@ if st.session_state.user_info is None and not st.session_state.is_admin:
                 selected_user = matches[0]
                 is_admin_user = selected_user['user_id'] in ADMIN_IDS
                 
-                # Logic Gatekeeper (Cập nhật theo config JSON)
+                # Check VIP
+                vip_list = get_vip_list()
+                is_vip = selected_user['user_id'] in vip_list
+
+                # Logic Gatekeeper
                 allow_entry = True
                 if not is_admin_user:
                     if not is_game_active or current_time > game_end_time:
@@ -257,9 +284,22 @@ if st.session_state.user_info is None and not st.session_state.is_admin:
                         st.session_state.wrong_guesses = 0
                         st.session_state.game_status = "PLAYING"
                         st.session_state.messages = []
+                        st.session_state.is_vip_user = is_vip
+                        
+                        # Set limits based on VIP
+                        if is_vip:
+                            st.session_state.current_max_q = VIP_MAX_QUESTIONS
+                            st.session_state.current_max_l = VIP_MAX_LIVES
+                            limit_msg = f"🌟 **VIP MEMBER DETECTED** 🌟\n- ❓ **{VIP_MAX_QUESTIONS} câu hỏi**\n- ❤️ **{VIP_MAX_LIVES} mạng**"
+                        else:
+                            st.session_state.current_max_q = STD_MAX_QUESTIONS
+                            st.session_state.current_max_l = STD_MAX_LIVES
+                            limit_msg = f"Luật chơi thường:\n- ❓ **{STD_MAX_QUESTIONS} câu hỏi**\n- ❤️ **{STD_MAX_LIVES} mạng**"
+
                         if not has_lost: log_activity(selected_user['user_name'], "Login")
                         
-                        welcome_msg = f"Ho Ho Ho! Chào **{selected_user['user_name']}**! 🎅\n\nLuật chơi mới:\n- ❓ **{MAX_QUESTIONS} câu hỏi** gợi ý.\n- ❤️ **{MAX_LIVES} mạng** (lượt đoán).\n- ⏳ Hãy chú ý đồng hồ đếm ngược!\n\nChúc may mắn!"
+                        # Welcome Message Updated
+                        welcome_msg = f"Ho Ho Ho! Chào **{selected_user['user_name']}**! 🎅\n\n{limit_msg}\n\n👉 **Đưa BTC 10k nếu bạn muốn nạp VIP!**\n⏳ Hãy chú ý đồng hồ đếm ngược!\n\nChúc may mắn!"
                         st.session_state.messages.append({"role": "assistant", "content": welcome_msg})
                         st.rerun()
                 else:
@@ -270,10 +310,10 @@ if st.session_state.user_info is None and not st.session_state.is_admin:
     st.stop()
 
 # ==============================================================================
-# 6. ADMIN PANEL (THAY MỚI THEO YÊU CẦU)
+# 6. ADMIN PANEL
 # ==============================================================================
 if st.session_state.is_admin:
-    st.title("🛡️ CONTROL CENTER (ADMIN)")
+    st.title("🛡️ TRUNG TÂM CHỈ HUY (ADMIN)")
     
     # --- PANEL ĐIỀU KHIỂN THỜI GIAN ---
     st.markdown("### ⏱️ ĐIỀU KHIỂN THỜI GIAN GAME")
@@ -286,7 +326,7 @@ if st.session_state.is_admin:
             st.write("") 
             if st.button("🚀 START / RESET", type="primary", use_container_width=True):
                 end_time = set_game_duration(duration_mins)
-                st.success(f"Đã set thời gian! Game kết thúc lúc: {datetime.datetime.fromtimestamp(end_time).strftime('%H:%M:%S')}")
+                st.success(f"Game End: {datetime.datetime.fromtimestamp(end_time).strftime('%H:%M:%S')}")
                 st.rerun()
         with col_t3:
             st.write("") 
@@ -296,12 +336,27 @@ if st.session_state.is_admin:
                 st.warning("Đã dừng game!")
                 st.rerun()
 
+    # --- PANEL NẠP VIP ---
+    st.markdown("### 💎 NẠP VIP")
+    with st.container(border=True):
+        col_vip1, col_vip2 = st.columns([3, 1])
+        with col_vip1:
+            vip_mshs_input = st.text_input("Nhập MSHS cần lên VIP:", placeholder="Ví dụ: 250123")
+        with col_vip2:
+            st.write("")
+            st.write("")
+            if st.button("🌟 CẤP VIP", type="primary", use_container_width=True):
+                if vip_mshs_input:
+                    add_vip_user(vip_mshs_input)
+                    st.success(f"Đã thêm VIP: {vip_mshs_input}")
+                else:
+                    st.error("Chưa nhập MSHS.")
+
     # --- SHOW REALTIME COUNTDOWN (PREVIEW) ---
     config = get_game_config()
     end_timestamp = config["end_time_epoch"]
     is_active_js = str(config["is_active"]).lower()
 
-    # JS Countdown hiển thị cho Admin xem chơi
     admin_timer_html = f"""
     <div style="text-align: center; background: #333; color: #00FF00; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 24px; border: 1px solid #00FF00;">
         ADMIN PREVIEW: <span id="admin_timer">Loading...</span>
@@ -337,10 +392,9 @@ if st.session_state.is_admin:
         st.rerun()
 
     # --- LOGS VÀ THỐNG KÊ ---
-    st.markdown("### 📊 THỐNG KÊ REAL-TIME")
+    st.markdown("### 📊 THỐNG KÊ")
     if os.path.exists(LOG_FILE_PATH):
         df_log = pd.read_csv(LOG_FILE_PATH)
-        # Đảm bảo có cột cần thiết
         if 'Hành động' in df_log.columns and 'Người chơi' in df_log.columns:
             df_win = df_log[df_log['Hành động'] == 'WIN']
             list_winners = df_win['Người chơi'].unique()
@@ -352,33 +406,23 @@ if st.session_state.is_admin:
             c2.metric("💀 ĐÃ THUA", len(list_losers))
             c3.metric("👥 TỔNG LOGIN", len(df_log[df_log['Hành động'] == 'Login']['Người chơi'].unique()))
             
-            col_list1, col_list2 = st.columns(2)
-            with col_list1:
-                st.info("🏆 DANH SÁCH THẮNG")
-                if len(list_winners) > 0: st.dataframe(list_winners, use_container_width=True, hide_index=True)
-            with col_list2:
-                st.error("💀 DANH SÁCH THUA")
-                if len(list_losers) > 0: st.dataframe(list_losers, use_container_width=True, hide_index=True)
-
             with st.expander("📝 Xem Chi Tiết Logs"):
                 st.dataframe(df_log.sort_values(by="Thời gian", ascending=False), use_container_width=True)
                 if st.button("🗑️ XÓA TOÀN BỘ LOG"):
                     os.remove(LOG_FILE_PATH)
                     st.rerun()
-        else:
-            st.warning("File log lỗi format.")
-    else:
-        st.info("Chưa có dữ liệu log.")
-    
     st.stop()
 
 # ==============================================================================
-# 7. MAIN GAME INTERFACE (CĂN GIỮA DASHBOARD)
+# 7. MAIN GAME INTERFACE
 # ==============================================================================
 user = st.session_state.user_info
-is_vip = user['user_id'] in ADMIN_IDS
+is_vip_admin = user['user_id'] in ADMIN_IDS
 
-# Cập nhật trạng thái mới nhất từ file Config
+# Lấy limits từ session
+LIMIT_Q = st.session_state.current_max_q
+LIMIT_L = st.session_state.current_max_l
+
 config = get_game_config()
 is_active = config["is_active"]
 end_timestamp = config["end_time_epoch"]
@@ -386,12 +430,12 @@ end_timestamp = config["end_time_epoch"]
 # Check Timeout
 if is_active:
     if time.time() > end_timestamp:
-        if not is_vip:
+        if not is_vip_admin:
             st.error("🛑 HẾT GIỜ! GAME OVER.")
             st.stop()
         else: st.toast("Admin Mode: Time is up.")
 
-if not is_vip and not is_active:
+if not is_vip_admin and not is_active:
     st.error("🛑 KẾT NỐI BỊ NGẮT (ADMIN STOP).")
     if st.button("Thoát"):
         st.session_state.user_info = None
@@ -400,12 +444,11 @@ if not is_vip and not is_active:
 
 target_gender = get_gender(user['santa_name'])
 
-st.title("🎁 PHÒNG THẨM VẤN")
+st.title("🎁 PHÒNG THAM VẤN TÌM RA SECRET SANTA")
 
-# --- CUSTOM DASHBOARD (HTML/CSS/JS) ---
-q_left = max(0, MAX_QUESTIONS - st.session_state.question_count)
-l_left = MAX_LIVES - st.session_state.wrong_guesses
-# Truyền biến xuống JS
+# --- DASHBOARD ---
+q_left = max(0, LIMIT_Q - st.session_state.question_count)
+l_left = LIMIT_L - st.session_state.wrong_guesses
 end_ts_js = end_timestamp if is_active else 0
 
 dashboard_html = f"""
@@ -422,7 +465,7 @@ dashboard_html = f"""
 ">
     <div style="text-align: center; width: 30%;">
         <div style="color: #AAA; font-size: 12px; font-weight: bold;">GỢI Ý</div>
-        <div style="color: #FFD700; font-size: 28px; font-weight: 900;">{q_left}<span style="font-size:14px; color:#666">/{MAX_QUESTIONS}</span></div>
+        <div style="color: #FFD700; font-size: 28px; font-weight: 900;">{q_left}<span style="font-size:14px; color:#666">/{LIMIT_Q}</span></div>
     </div>
     
     <div style="text-align: center; width: 40%; border-left: 1px solid #444; border-right: 1px solid #444;">
@@ -432,7 +475,7 @@ dashboard_html = f"""
 
     <div style="text-align: center; width: 30%;">
         <div style="color: #AAA; font-size: 12px; font-weight: bold;">MẠNG</div>
-        <div style="color: #FF4500; font-size: 28px; font-weight: 900;">{l_left}<span style="font-size:14px; color:#666">/{MAX_LIVES}</span></div>
+        <div style="color: #FF4500; font-size: 28px; font-weight: 900;">{l_left}<span style="font-size:14px; color:#666">/{LIMIT_L}</span></div>
     </div>
 </div>
 
@@ -453,7 +496,6 @@ dashboard_html = f"""
         var s = Math.floor(diff % 60);
         el.innerHTML = (m<10?"0"+m:m) + ":" + (s<10?"0"+s:s);
         
-        // Đổi màu khi sắp hết giờ
         if (diff < 60) el.style.color = "orange";
         if (diff < 10) el.style.color = "red";
     }}
@@ -466,8 +508,11 @@ components.html(dashboard_html, height=100)
 # SIDEBAR & MENU
 with st.sidebar:
     st.markdown(f"<h2 style='text-align:center'>👤 {user['user_name']}</h2>", unsafe_allow_html=True)
+    if st.session_state.is_vip_user:
+        st.markdown("<div style='text-align:center; color:gold; font-weight:bold; border:1px solid gold; padding:5px; border-radius:5px;'>🌟 VIP MEMBER</div>", unsafe_allow_html=True)
+    
     if user['user_id'] in ADMIN_IDS:
-        if st.button("🛡️ VÀO ADMIN", type="primary"):
+        if st.button("🛡️ ADMIN", type="primary"):
             st.session_state.is_admin = True
             st.rerun()
     st.divider()
@@ -499,13 +544,14 @@ if prompt := st.chat_input("Nhập câu hỏi gợi ý hoặc đoán tên..."):
     try:
         client = Groq(api_key=FIXED_GROQ_API_KEY)
         
+        # --- CẬP NHẬT SYSTEM INSTRUCTION MỚI THEO YÊU CẦU ---
         system_instruction = f"""
         Bạn là AI Quản trò Secret Santa (tên mã NPLM). Tính cách: Lạnh lùng, bí hiểm, thích đánh đố, châm biếm nhưng công bằng.
         
         DỮ LIỆU BÍ MẬT:
         - Người chơi (User): {user['user_name']}
         - Kẻ Bí Mật (Santa): {user['santa_name']} (Giới tính: {target_gender}, MSHS: {user['santa_id']})
-        - Trạng thái: Đã hỏi {st.session_state.question_count}/{MAX_QUESTIONS}. Sai {st.session_state.wrong_guesses}/{MAX_LIVES}.
+        - Trạng thái: Đã hỏi {st.session_state.question_count}/{LIMIT_Q}. Sai {st.session_state.wrong_guesses}/{LIMIT_L}.
         
         CẤU TRÚC TÊN SANTA (Quan trọng):
         - Tên Santa có dạng: [Họ] [Đệm] [Tên].
@@ -527,7 +573,7 @@ if prompt := st.chat_input("Nhập câu hỏi gợi ý hoặc đoán tên..."):
 
         3. [[OK]] : 
            - Dùng khi user đặt câu hỏi gợi ý hợp lệ (Về giới tính, MSHS, tên chính, họ, chữ lót...).
-           - Nếu đã hỏi hết {MAX_QUESTIONS} câu -> KHÔNG dùng [[OK]]. Hãy từ chối lạnh lùng và ép họ đoán tên.
+           - Nếu đã hỏi hết {LIMIT_Q} câu -> KHÔNG dùng [[OK]]. Hãy từ chối lạnh lùng và ép họ đoán tên.
            - Nếu hỏi về ngoại hình/khuôn mặt -> Từ chối (bảo camera hỏng hoặc ta không quan tâm vẻ bề ngoài).
            - Khi hỏi về "Tên": Chỉ gợi ý về TÊN CHÍNH (từ cuối cùng), ví dụ số chữ cái, chữ cái đầu của tên chính.
 
@@ -542,6 +588,7 @@ if prompt := st.chat_input("Nhập câu hỏi gợi ý hoặc đoán tên..."):
         - Hãy trả lời dài dòng, văn vở, bí hiểm một chút.
         - Sử dụng nhiều emoji 🎄🎅❄️🎁💀😈 phù hợp với tính cách quản trò bí ẩn.
         """
+        
         messages_payload = [{"role": "system", "content": system_instruction}]
         for m in st.session_state.messages[-6:]: messages_payload.append({"role": m["role"], "content": m["content"]})
 
@@ -568,13 +615,13 @@ if prompt := st.chat_input("Nhập câu hỏi gợi ý hoặc đoán tên..."):
                 st.session_state.wrong_guesses += 1
                 log_activity(user['user_name'], "Guess Wrong")
                 final_content = full_res.replace("[[WRONG]]", "")
-                if st.session_state.wrong_guesses >= MAX_LIVES:
+                if st.session_state.wrong_guesses >= LIMIT_L:
                     st.session_state.game_status = "LOST"
                     log_activity(user['user_name'], "GAME OVER")
                     action = "LOST"
                 else: action = "WRONG"
             elif "[[OK]]" in full_res:
-                if st.session_state.question_count < MAX_QUESTIONS:
+                if st.session_state.question_count < LIMIT_Q:
                     st.session_state.question_count += 1
                     final_content = full_res.replace("[[OK]]", "")
                     action = "OK"
@@ -589,9 +636,3 @@ if prompt := st.chat_input("Nhập câu hỏi gợi ý hoặc đoán tên..."):
                 st.rerun()
 
     except Exception as e: st.error(f"Lỗi: {e}")
-
-
-
-
-
-
