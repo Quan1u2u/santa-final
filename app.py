@@ -240,13 +240,61 @@ if st.session_state.user_info is None and not st.session_state.is_admin:
     st.title("🎅")
     st.markdown("<h3 style='text-align: center; color: white;'>✨ 10 TIN - PTNK Secret Santa ✨</h3>", unsafe_allow_html=True)
     
-    # STATUS CHECK
+    # --- PHẦN 1: TRẠNG THÁI CỔNG (HEADER) ---
     if not is_game_active:
-        st.info("⏳ CỔNG CHƯA MỞ ⏳")
+        # ⏳ CHỜ: Xanh Dương Đậm
+        st.markdown(
+            """<div style="
+                background-color: #003366; 
+                color: #FFFFFF; 
+                padding: 15px 20px; 
+                border-radius: 12px; 
+                border: 2px solid #3399FF;
+                text-align: center; 
+                font-weight: bold; 
+                font-size: 18px;
+                margin-bottom: 20px;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+            ⏳ CỔNG CHƯA MỞ ⏳
+            </div>""", 
+            unsafe_allow_html=True
+        )
     elif current_time > game_end_time:
-        st.error("🛑 SỰ KIỆN ĐÃ KẾT THÚC (HẾT GIỜ).")
+        # 🛑 KẾT THÚC: Đỏ Đậm
+        st.markdown(
+            """<div style="
+                background-color: #8B0000; 
+                color: #FFFFFF; 
+                padding: 15px 20px; 
+                border-radius: 12px; 
+                border: 2px solid #FF6666;
+                text-align: center; 
+                font-weight: bold; 
+                font-size: 18px;
+                margin-bottom: 20px;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+            🛑 SỰ KIỆN ĐÃ KẾT THÚC (HẾT GIỜ)
+            </div>""", 
+            unsafe_allow_html=True
+        )
     else:
-        st.success("🟢 CỔNG ĐANG MỞ! MỜI VÀO!")
+        # 🟢 ĐANG MỞ: Xanh Lá Đậm
+        st.markdown(
+            """<div style="
+                background-color: #006400; 
+                color: #FFFFFF; 
+                padding: 15px 20px; 
+                border-radius: 12px; 
+                border: 2px solid #33FF33;
+                text-align: center; 
+                font-weight: bold; 
+                font-size: 18px;
+                margin-bottom: 20px;
+                box-shadow: 0 0 15px rgba(50, 255, 50, 0.4);">
+            🟢 CỔNG ĐANG MỞ! MỜI VÀO!
+            </div>""", 
+            unsafe_allow_html=True
+        )
 
     profiles = load_data(FIXED_CSV_PATH)
 
@@ -268,7 +316,7 @@ if st.session_state.user_info is None and not st.session_state.is_admin:
                 vip_list = get_vip_list()
                 is_vip = selected_user['user_id'] in vip_list
 
-                # Logic Gatekeeper
+                # Logic Gatekeeper (Kiểm soát giờ giấc cho user thường)
                 allow_entry = True
                 if not is_admin_user:
                     if not is_game_active or current_time > game_end_time:
@@ -277,9 +325,23 @@ if st.session_state.user_info is None and not st.session_state.is_admin:
                 if allow_entry:
                     has_lost = check_if_lost(selected_user['user_name'])
                     if not is_admin_user and has_lost:
-                        st.error("⛔ Bạn đã hết lượt tham gia!")
+                        # ⛔ BÁO LỖI: HẾT LƯỢT (Đỏ Đậm)
+                        st.markdown(
+                            """<div style="
+                                background-color: #8B0000; 
+                                color: #FFFFFF; 
+                                padding: 15px; 
+                                border-radius: 10px; 
+                                border: 2px solid #FF0000; 
+                                text-align: center; 
+                                font-weight: bold; 
+                                margin-top: 10px;">
+                            ⛔ BẠN ĐÃ HẾT LƯỢT THAM GIA!<br>Hẹn gặp lại mùa sau nhé.
+                            </div>""",
+                            unsafe_allow_html=True
+                        )
                     else:
-                        # LOGIN SUCCESS
+                        # LOGIN SUCCESS (VÀO GAME)
                         st.session_state.user_info = selected_user
                         st.session_state.question_count = 0
                         st.session_state.wrong_guesses = 0
@@ -299,17 +361,78 @@ if st.session_state.user_info is None and not st.session_state.is_admin:
 
                         if not has_lost: log_activity(selected_user['user_name'], "Login")
                         
-                        # Welcome Message (Icon mặc định)
+                        # Welcome Message
                         welcome_msg = f"Ho Ho Ho! Chào **{selected_user['user_name']}**! 🎅\n\n{limit_msg}\n\n👉 **Đưa BTC 10k nếu bạn muốn nạp VIP!**\n⏳ Hãy chú ý đồng hồ đếm ngược!\n\nChúc may mắn!"
                         st.session_state.messages.append({"role": "assistant", "content": welcome_msg})
                         st.rerun()
                 else:
-                    if not is_game_active: st.warning("🚧 Cổng chưa mở.")
-                    else: st.error("🏁 Đã hết giờ.")
-            elif len(matches) > 1: st.warning("⚠️ Trùng tên, vui lòng nhập MSHS.")
-            else: st.error("❌ Không tìm thấy dữ liệu.")
-    st.stop()
+                    # BÁO LỖI KHI CỐ ĐĂNG NHẬP LÚC CỔNG ĐÓNG
+                    if not is_game_active: 
+                        # 🚧 Cảnh báo chưa mở (Cam Đậm)
+                         st.markdown(
+                            """<div style="
+                                background-color: #995500; 
+                                color: #FFFFFF; 
+                                padding: 15px; 
+                                border-radius: 10px; 
+                                border: 2px solid #FFCC00; 
+                                text-align: center; 
+                                font-weight: bold; 
+                                margin-top: 10px;">
+                            🚧 CỔNG CHƯA MỞ! VUI LÒNG QUAY LẠI SAU.
+                            </div>""",
+                            unsafe_allow_html=True
+                        )
+                    else: 
+                        # 🏁 Cảnh báo hết giờ (Đỏ Đậm)
+                        st.markdown(
+                            """<div style="
+                                background-color: #8B0000; 
+                                color: #FFFFFF; 
+                                padding: 15px; 
+                                border-radius: 10px; 
+                                border: 2px solid #FF0000; 
+                                text-align: center; 
+                                font-weight: bold; 
+                                margin-top: 10px;">
+                            🏁 SỰ KIỆN ĐÃ KẾT THÚC. KHÔNG THỂ ĐĂNG NHẬP.
+                            </div>""",
+                            unsafe_allow_html=True
+                        )
 
+            elif len(matches) > 1: 
+                # ⚠️ CẢNH BÁO TRÙNG TÊN (Cam Đậm)
+                st.markdown(
+                    """<div style="
+                        background-color: #995500; 
+                        color: #FFFFFF; 
+                        padding: 15px; 
+                        border-radius: 10px; 
+                        border: 2px solid #FFCC00; 
+                        text-align: center; 
+                        font-weight: bold; 
+                        margin-top: 10px;">
+                    ⚠️ PHÁT HIỆN TRÙNG TÊN!<br>Vui lòng nhập chính xác <b>Mã Số Học Sinh</b> để đăng nhập.
+                    </div>""",
+                    unsafe_allow_html=True
+                )
+            else: 
+                # ❌ KHÔNG TÌM THẤY (Đỏ Đậm)
+                st.markdown(
+                    """<div style="
+                        background-color: #8B0000; 
+                        color: #FFFFFF; 
+                        padding: 15px; 
+                        border-radius: 10px; 
+                        border: 2px solid #FF0000; 
+                        text-align: center; 
+                        font-weight: bold; 
+                        margin-top: 15px;">
+                    ❌ KHÔNG TÌM THẤY DỮ LIỆU NGƯỜI CHƠI.<br>Vui lòng kiểm tra lại Tên hoặc MSHS.
+                    </div>""",
+                    unsafe_allow_html=True
+                )
+    st.stop()
 # ==============================================================================
 # 6. ADMIN PANEL
 # ==============================================================================
@@ -636,6 +759,7 @@ if prompt := st.chat_input("Nhập câu hỏi gợi ý hoặc đoán tên..."):
                 st.rerun()
 
     except Exception as e: st.error(f"Lỗi: {e}")
+
 
 
 
