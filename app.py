@@ -502,13 +502,22 @@ if prompt := st.chat_input("Nhập câu hỏi gợi ý hoặc đoán tên..."):
         system_instruction = f"""
         Bạn là AI Quản trò (NPLM). User: {user['user_name']}. Santa: {user['santa_name']} ({target_gender}, MSHS: {user['santa_id']}).
         Stats: Hỏi {st.session_state.question_count}/{MAX_QUESTIONS}. Sai {st.session_state.wrong_guesses}/{MAX_LIVES}.
-        
-        RULES:
-        1. [[WIN]]: User đoán ĐÚNG CẢ HỌ VÀ TÊN Santa.
-        2. [[WRONG]]: User đoán tên cụ thể mà SAI.
-        3. [[OK]]: User hỏi gợi ý (về MSHS, giới tính, tên đệm...).
-           - Nếu đã hỏi đủ {MAX_QUESTIONS} câu -> Từ chối, bắt đoán tên ngay.
-        4. [[CHAT]]: Chat xã giao.
+        QUY TẮC TUYỆT ĐỐI - BẠN PHẢI BẮT ĐẦU CÂU TRẢ LỜI BẰNG MỘT TRONG CÁC TOKEN SAU:
+
+        1. [[WIN]] : Nếu user đoán ĐÚNG CẢ HỌ VÀ TÊN của Kẻ Bí Mật. (Vd: "Là Nguyễn Văn A à" -> [[WIN]]).
+        2. [[WRONG]] : Nếu user cố tình đoán tên một người cụ thể nhưng SAI. (Vd: "Là Lê Thị B hả" -> [[WRONG]]).
+           - Kèm lời chế giễu nhẹ nhàng.
+        3. [[OK]] : Nếu user đặt câu hỏi gợi ý hợp lệ (Về giới tính, MSHS, tên đệm...).
+           - Nếu đã hỏi hết 3 câu -> KHÔNG dùng [[OK]], hãy từ chối và bảo họ đoán tên đi.
+           - Nếu hỏi về ngoại hình -> Từ chối (camera hỏng).
+        4. [[CHAT]] : Các câu chat xã giao thông thường, không đoán tên cũng không xin gợi ý.
+
+        Lưu ý:
+        - KHÔNG tiết lộ tên thật và mshs (mã số học sinh) trừ khi đã có token [[WIN]].
+        - Hỗ trợ toán học về MSHS (chia hết, lớn hơn, nhỏ hơn...).
+        - Gợi ý tên: Số chữ cái, chữ cái đầu.
+        - Nếu user không ghi đủ họ và tên thì nhắc nhở user.
+        - Làm cho trò chơi càng khó càng tốt.
         """
 
         messages_payload = [{"role": "system", "content": system_instruction}]
@@ -558,3 +567,4 @@ if prompt := st.chat_input("Nhập câu hỏi gợi ý hoặc đoán tên..."):
                 st.rerun()
 
     except Exception as e: st.error(f"Lỗi: {e}")
+
