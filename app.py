@@ -299,7 +299,7 @@ if st.session_state.user_info is None and not st.session_state.is_admin:
 
                         if not has_lost: log_activity(selected_user['user_name'], "Login")
                         
-                        # Welcome Message Updated
+                        # Welcome Message (Icon mặc định)
                         welcome_msg = f"Ho Ho Ho! Chào **{selected_user['user_name']}**! 🎅\n\n{limit_msg}\n\n👉 **Đưa BTC 10k nếu bạn muốn nạp VIP!**\n⏳ Hãy chú ý đồng hồ đếm ngược!\n\nChúc may mắn!"
                         st.session_state.messages.append({"role": "assistant", "content": welcome_msg})
                         st.rerun()
@@ -521,16 +521,10 @@ with st.sidebar:
          st.session_state.user_info = None
          st.rerun()
 
-# CHAT HISTORY (UPDATED WITH AVATARS)
+# CHAT HISTORY (DEFAULT ICONS)
 for msg in st.session_state.messages:
-    if msg["role"] == "assistant":
-        # Avatar AI Mặt Cười
-        with st.chat_message(msg["role"], avatar="😎"):
-            st.markdown(msg["content"])
-    else:
-        # Avatar Người
-        with st.chat_message(msg["role"], avatar="👤"):
-            st.markdown(msg["content"])
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
 
 # CHECK GAME OVER / WIN
 if st.session_state.game_status == "LOST":
@@ -543,11 +537,10 @@ if st.session_state.game_status == "WON":
     st.success(f"🎉 CHÍNH XÁC! SECRET SANTA LÀ: {user['santa_name']}")
     st.stop()
 
-# INPUT AREA (UPDATED AVATAR)
+# INPUT AREA (DEFAULT ICONS)
 if prompt := st.chat_input("Nhập câu hỏi gợi ý hoặc đoán tên..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
-    # Avatar Người
-    with st.chat_message("user", avatar="👤"): st.markdown(prompt)
+    with st.chat_message("user"): st.markdown(prompt)
 
     try:
         client = Groq(api_key=FIXED_GROQ_API_KEY)
@@ -599,8 +592,7 @@ if prompt := st.chat_input("Nhập câu hỏi gợi ý hoặc đoán tên..."):
         messages_payload = [{"role": "system", "content": system_instruction}]
         for m in st.session_state.messages[-6:]: messages_payload.append({"role": m["role"], "content": m["content"]})
 
-        # Avatar AI Mặt Cười (Assistant)
-        with st.chat_message("assistant", avatar="😎"):
+        with st.chat_message("assistant"):
             container = st.empty()
             full_res = ""
             stream = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=messages_payload, stream=True)
