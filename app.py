@@ -238,7 +238,8 @@ current_time = time.time()
 # ==============================================================================
 if st.session_state.user_info is None and not st.session_state.is_admin:
     st.title("🎄 CỔNG GIÁNG SINH 🎄")
-    st.markdown("<h3 style='color: #FFD700; margin-bottom: 20px;'>SECRET SANTA FESTIVE</h3>", unsafe_allow_html=True)
+    st.title("🎅")
+    st.markdown("<h3 style='text-align: center; color: white;'>✨ 10 TIN - PTNK Secret Santa ✨</h3>", unsafe_allow_html=True)
     
     # STATUS CHECK
     if not is_game_active:
@@ -251,8 +252,8 @@ if st.session_state.user_info is None and not st.session_state.is_admin:
     profiles = load_data(FIXED_CSV_PATH)
 
     with st.form("login_form"):
-        st.markdown("<div style='text-align: center; color: white;'>NHẬP DANH TÍNH CỦA BẠN</div>", unsafe_allow_html=True)
-        user_input = st.text_input("", placeholder="Mã số học sinh hoặc Tên...") 
+        st.markdown("**Nhập thông tin của bạn:**")
+        user_input = st.text_input("Mã số học sinh (hoặc Tên):", placeholder="Ví dụ: 250218...")
         
         submitted = st.form_submit_button("🚀 BƯỚC VÀO THẾ GIỚI", type="primary")
 
@@ -636,4 +637,5 @@ if prompt := st.chat_input("Nhập câu hỏi gợi ý hoặc đoán tên..."):
                 st.rerun()
 
     except Exception as e: st.error(f"Lỗi: {e}")
+
 
