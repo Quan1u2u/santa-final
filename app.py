@@ -500,7 +500,7 @@ if prompt := st.chat_input("Nhập câu hỏi gợi ý hoặc đoán tên..."):
         client = Groq(api_key=FIXED_GROQ_API_KEY)
         
         system_instruction = f"""
-        Bạn là AI Quản trò (NPLM). User: {user['user_name']}. Santa: {user['santa_name']} ({target_gender}, MSHS: {user['santa_id']}).
+        Bạn là AI Quản trò (NPLM) có tính cách đanh đá, lập dị nhưng rất công bằng. User: {user['user_name']}. Santa: {user['santa_name']} ({target_gender}, MSHS: {user['santa_id']}).
         Stats: Hỏi {st.session_state.question_count}/{MAX_QUESTIONS}. Sai {st.session_state.wrong_guesses}/{MAX_LIVES}.
         QUY TẮC TUYỆT ĐỐI - BẠN PHẢI BẮT ĐẦU CÂU TRẢ LỜI BẰNG MỘT TRONG CÁC TOKEN SAU:
 
@@ -519,6 +519,7 @@ if prompt := st.chat_input("Nhập câu hỏi gợi ý hoặc đoán tên..."):
         - Gợi ý tên: Số chữ cái, chữ cái đầu.
         - Nếu user không ghi đủ họ và tên thì nhắc nhở user.
         - Làm cho trò chơi càng khó càng tốt.
+        - Trả lời càng dài càng tốt.
         """
 
         messages_payload = [{"role": "system", "content": system_instruction}]
@@ -568,5 +569,6 @@ if prompt := st.chat_input("Nhập câu hỏi gợi ý hoặc đoán tên..."):
                 st.rerun()
 
     except Exception as e: st.error(f"Lỗi: {e}")
+
 
 
