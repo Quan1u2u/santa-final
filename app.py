@@ -27,11 +27,11 @@ BACKGROUND_IMAGE_NAME = "background.jpg"
 ADMIN_IDS = ["250231", "250218", "admin"]
 
 # --- LUẬT CHƠI (STANDARD vs VIP) ---
-STD_MAX_QUESTIONS = 5   # Thường: 5 câu
-STD_MAX_LIVES = 3       # Thường: 3 mạng
+STD_MAX_QUESTIONS = 3   # Thường: 3 câu
+STD_MAX_LIVES = 1       # Thường: 1 mạng
 
-VIP_MAX_QUESTIONS = 10  # VIP: 10 câu
-VIP_MAX_LIVES = 5       # VIP: 5 mạng
+VIP_MAX_QUESTIONS = 5  # VIP: 5 câu
+VIP_MAX_LIVES = 3       # VIP: 3 mạng
 
 DEFAULT_DURATION = 15 
 
@@ -241,7 +241,7 @@ if st.session_state.user_info is None and not st.session_state.is_admin:
     
     # STATUS CHECK
     if not is_game_active:
-        st.info("⏳ CỔNG CHƯA MỞ HOẶC ĐÃ BỊ ADMIN ĐÓNG.")
+        st.info("⏳ CỔNG CHƯA MỞ ⏳")
     elif current_time > game_end_time:
         st.error("🛑 SỰ KIỆN ĐÃ KẾT THÚC (HẾT GIỜ).")
     else:
@@ -313,7 +313,7 @@ if st.session_state.user_info is None and not st.session_state.is_admin:
 # 6. ADMIN PANEL
 # ==============================================================================
 if st.session_state.is_admin:
-    st.title("🛡️ TRUNG TÂM CHỈ HUY (ADMIN)")
+    st.title("🛡️ TRUNG TÂM CHỈ HUY 🛡️(ADMIN)")
     
     # --- PANEL ĐIỀU KHIỂN THỜI GIAN ---
     st.markdown("### ⏱️ ĐIỀU KHIỂN THỜI GIAN GAME")
@@ -345,7 +345,7 @@ if st.session_state.is_admin:
         with col_vip2:
             st.write("")
             st.write("")
-            if st.button("🌟 CẤP VIP", type="primary", use_container_width=True):
+            if st.button("🌟 NÂNG VIP", type="primary", use_container_width=True):
                 if vip_mshs_input:
                     add_vip_user(vip_mshs_input)
                     st.success(f"Đã thêm VIP: {vip_mshs_input}")
@@ -636,3 +636,4 @@ if prompt := st.chat_input("Nhập câu hỏi gợi ý hoặc đoán tên..."):
                 st.rerun()
 
     except Exception as e: st.error(f"Lỗi: {e}")
+
