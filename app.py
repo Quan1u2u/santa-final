@@ -150,7 +150,7 @@ st.markdown("""
 <style>
     /* KHUNG CHÍNH */
     .main .block-container { 
-        background-color: rgba(0, 0, 0, 0.85) !important; 
+        background-color: rgba(0, 0, 0, 0.98) !important; 
         padding: 30px !important; 
         border-radius: 25px; 
         border: 2px solid #FFD700; 
@@ -457,7 +457,7 @@ dashboard_html = f"""
     display: flex; 
     justify-content: space-around; 
     align-items: center; 
-    background-color: rgba(34, 34, 34, 0.9); 
+    background-color: #222222; 
     border: 2px solid #FFD700; 
     border-radius: 15px; 
     padding: 15px; 
@@ -636,6 +636,7 @@ if prompt := st.chat_input("Nhập câu hỏi gợi ý hoặc đoán tên..."):
                 st.rerun()
 
     except Exception as e: st.error(f"Lỗi: {e}")
+
 
 
 
