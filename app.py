@@ -141,16 +141,15 @@ def load_data(filepath):
 # 3. CSS & GIAO DIỆN
 # ==============================================================================
 bin_str = get_base64_of_bin_file(BACKGROUND_IMAGE_NAME)
-bin_str = get_base64_of_bin_file(BACKGROUND_IMAGE_NAME)
 if bin_str:
     page_bg_img = f'''
     <style>
     .stApp {{
         background-image: url("data:image/jpg;base64,{bin_str}");
         background-attachment: fixed;
-        background-position: center bottom; /* <--- THAY ĐỔI Ở ĐÂY: Neo xuống đáy */
+        background-position: center;
         background-repeat: no-repeat;
-        background-size: cover;
+        background-size: 100% 100%; /* <--- THAY ĐỔI Ở ĐÂY: Ép giãn vừa khít */
     }}
     </style>
     '''
