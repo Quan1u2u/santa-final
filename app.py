@@ -141,12 +141,22 @@ def load_data(filepath):
 # 3. CSS & GIAO DIỆN
 # ==============================================================================
 bin_str = get_base64_of_bin_file(BACKGROUND_IMAGE_NAME)
+bin_str = get_base64_of_bin_file(BACKGROUND_IMAGE_NAME)
 if bin_str:
-    page_bg_img = f'''<style>.stApp {{background-image: url("data:image/jpg;base64,{bin_str}"); background-attachment: fixed; background-size: cover;}}</style>'''
+    page_bg_img = f'''
+    <style>
+    .stApp {{
+        background-image: url("data:image/jpg;base64,{bin_str}");
+        background-attachment: fixed;
+        background-position: center bottom; /* <--- THAY ĐỔI Ở ĐÂY: Neo xuống đáy */
+        background-repeat: no-repeat;
+        background-size: cover;
+    }}
+    </style>
+    '''
 else:
-    page_bg_img = '''<style>.stApp { background-image: linear-gradient(to bottom, #0f2027, #203a43, #2c5364); }</style>'''
+    page_bg_img = '''<style>.stApp { background-image: linear-gradient(to bottom, #000000, #1a1a1a); }</style>'''
 st.markdown(page_bg_img, unsafe_allow_html=True)
-
 st.markdown("""
 <style>
     /* KHUNG CHÍNH */
@@ -637,6 +647,7 @@ if prompt := st.chat_input("Nhập câu hỏi gợi ý hoặc đoán tên..."):
                 st.rerun()
 
     except Exception as e: st.error(f"Lỗi: {e}")
+
 
 
 
