@@ -15,7 +15,8 @@ import json
 try:
     FIXED_GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 except:
-    FIXED_GROQ_API_KEY = "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"
+    # Key dự phòng nếu không có secret
+    FIXED_GROQ_API_KEY = "gsk_YOUR_API_KEY_HERE"
 
 FIXED_CSV_PATH = "res.csv"
 LOG_FILE_PATH = "game_logs.csv"
@@ -520,10 +521,16 @@ with st.sidebar:
          st.session_state.user_info = None
          st.rerun()
 
-# CHAT HISTORY
+# CHAT HISTORY (UPDATED WITH AVATARS)
 for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
+    if msg["role"] == "assistant":
+        # Avatar AI Mặt Cười
+        with st.chat_message(msg["role"], avatar="😎"):
+            st.markdown(msg["content"])
+    else:
+        # Avatar Người
+        with st.chat_message(msg["role"], avatar="👤"):
+            st.markdown(msg["content"])
 
 # CHECK GAME OVER / WIN
 if st.session_state.game_status == "LOST":
@@ -536,15 +543,15 @@ if st.session_state.game_status == "WON":
     st.success(f"🎉 CHÍNH XÁC! SECRET SANTA LÀ: {user['santa_name']}")
     st.stop()
 
-# INPUT AREA
+# INPUT AREA (UPDATED AVATAR)
 if prompt := st.chat_input("Nhập câu hỏi gợi ý hoặc đoán tên..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"): st.markdown(prompt)
+    # Avatar Người
+    with st.chat_message("user", avatar="👤"): st.markdown(prompt)
 
     try:
         client = Groq(api_key=FIXED_GROQ_API_KEY)
         
-        # --- CẬP NHẬT SYSTEM INSTRUCTION MỚI THEO YÊU CẦU ---
         system_instruction = f"""
         Bạn là AI Quản trò Secret Santa (tên mã NPLM). Tính cách: Lạnh lùng, bí hiểm, thích đánh đố, châm biếm nhưng công bằng.
         
@@ -592,7 +599,8 @@ if prompt := st.chat_input("Nhập câu hỏi gợi ý hoặc đoán tên..."):
         messages_payload = [{"role": "system", "content": system_instruction}]
         for m in st.session_state.messages[-6:]: messages_payload.append({"role": m["role"], "content": m["content"]})
 
-        with st.chat_message("assistant"):
+        # Avatar AI Mặt Cười (Assistant)
+        with st.chat_message("assistant", avatar="😎"):
             container = st.empty()
             full_res = ""
             stream = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=messages_payload, stream=True)
@@ -636,4 +644,3 @@ if prompt := st.chat_input("Nhập câu hỏi gợi ý hoặc đoán tên..."):
                 st.rerun()
 
     except Exception as e: st.error(f"Lỗi: {e}")
-
