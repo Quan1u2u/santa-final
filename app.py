@@ -559,4 +559,117 @@ for msg in st.session_state.messages:
 
 # CHECK GAME OVER / WIN
 if st.session_state.game_status == "LOST":
-    st.markdown("""<div style="background-color: #
+    st.markdown("""<div style="background-color: #8B0000; color: white; padding: 15px; border-radius: 10px; text-align: center; border: 2px solid red; font-weight: bold;">☠️ GAME OVER! BẠN ĐÃ HẾT MẠNG.</div>""", unsafe_allow_html=True)
+    st.info(f"Người tặng quà cho bạn là: **{user['santa_name']}**")
+    st.stop()
+
+if st.session_state.game_status == "WON":
+    st.balloons()
+    st.markdown(f"""<div style="background-color: #006400; color: white; padding: 15px; border-radius: 10px; text-align: center; border: 2px solid #33FF33; font-weight: bold;">🎉 CHÍNH XÁC! SECRET SANTA LÀ: {user['santa_name']}</div>""", unsafe_allow_html=True)
+    st.stop()
+
+# INPUT AREA
+if prompt := st.chat_input("Nhập câu hỏi gợi ý hoặc đoán tên..."):
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"): st.markdown(prompt)
+
+    try:
+        client = Groq(api_key=FIXED_GROQ_API_KEY)
+        
+        system_instruction = f"""
+        Bạn là AI Quản trò Secret Santa (tên mã NPLM). Tính cách: Lạnh lùng, bí hiểm, thích đánh đố, châm biếm nhưng công bằng.
+        
+        DỮ LIỆU BÍ MẬT:
+        - Người chơi (User): {user['user_name']}
+        - Kẻ Bí Mật (Santa): {user['santa_name']} (Giới tính: {target_gender}, MSHS: {user['santa_id']})
+        - Trạng thái: Đã hỏi {st.session_state.question_count}/{LIMIT_Q}. Sai {st.session_state.wrong_guesses}/{LIMIT_L}.
+        
+        CẤU TRÚC TÊN SANTA (Quan trọng):
+        - Tên Santa có dạng: [Họ] [Đệm] [Tên].
+        - Ví dụ: "Phạm Lê Minh Quân" -> Họ: Phạm, Đệm: Lê Minh, Tên chính: Quân.
+        - Mọi gợi ý về "Tên" chỉ liên quan đến "Tên chính" (từ cuối cùng).
+        - Gợi ý về "Họ" là từ đầu tiên.
+        - Gợi ý về "Chữ lót/Đệm" là các từ ở giữa.
+
+        QUY TẮC TUYỆT ĐỐI - BẠN PHẢI BẮT ĐẦU CÂU TRẢ LỜI BẰNG MỘT TRONG CÁC TOKEN SAU:
+
+        1. [[WIN]] : 
+           - Chỉ dùng khi user đoán ĐÚNG CẢ HỌ VÀ TÊN của Kẻ Bí Mật (chấp nhận không dấu, viết thường, đủ các thành phần). 
+           - Ví dụ: Santa là "Nguyễn Văn A". User đoán "Nguyễn Văn A" -> [[WIN]].
+           - Nếu thiếu họ hoặc đệm -> Dùng [[CHAT]] để nhắc nhở ghi đầy đủ.
+
+        2. [[WRONG]] : 
+           - Dùng khi user cố tình đưa ra một cái tên cụ thể (có vẻ là Họ Tên) để đoán nhưng SAI.
+           - Kèm lời chế giễu nhẹ nhàng về sự tự tin thái quá của họ.
+
+        3. [[OK]] : 
+           - Dùng khi user đặt câu hỏi gợi ý hợp lệ (Về giới tính, MSHS, tên chính, họ, chữ lót...).
+           - Nếu đã hỏi hết {LIMIT_Q} câu -> KHÔNG dùng [[OK]]. Hãy từ chối lạnh lùng và ép họ đoán tên.
+           - Nếu hỏi về ngoại hình/khuôn mặt -> Từ chối (bảo camera hỏng hoặc ta không quan tâm vẻ bề ngoài).
+           - Khi hỏi về "Tên": Chỉ gợi ý về TÊN CHÍNH (từ cuối cùng), ví dụ số chữ cái, chữ cái đầu của tên chính.
+
+        4. [[CHAT]] : 
+           - Các câu chat xã giao, tào lao, không đoán tên cũng không xin gợi ý.
+           - Dùng để nhắc nhở nếu user đoán tên mà thiếu họ/đệm.
+           - Xử lý câu hỏi về MSHS: TUYỆT ĐỐI KHÔNG tiết lộ con số cụ thể. Chỉ dùng các phép so sánh toán học (lớn hơn, bé hơn, chia hết cho X, là số nguyên tố hay không...). So sánh MSHS của Santa với MSHS của User ({user['user_id']}) là một cách hay.
+
+        LƯU Ý QUAN TRỌNG KHI TRẢ LỜI:
+        - KHÔNG BAO GIỜ tiết lộ tên hay họ tên của santa hoặc MSHS cụ thể của Santa.
+        - Mục tiêu: Làm cho trò chơi KHÓ NHẤT CÓ THỂ. Đừng gợi ý quá rõ ràng. Hãy dùng câu đố hoặc ẩn dụ.
+        - Hãy trả lời dài dòng, văn vở, bí hiểm một chút.
+        - Sử dụng nhiều emoji 🎄🎅❄️🎁💀😈 phù hợp với tính cách quản trò bí ẩn.
+        """
+        
+        messages_payload = [{"role": "system", "content": system_instruction}]
+        for m in st.session_state.messages[-6:]: messages_payload.append({"role": m["role"], "content": m["content"]})
+
+        with st.chat_message("assistant"):
+            container = st.empty()
+            full_res = ""
+            stream = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=messages_payload, stream=True)
+            
+            for chunk in stream:
+                if chunk.choices[0].delta.content:
+                    full_res += chunk.choices[0].delta.content
+                    clean = full_res.replace("[[WIN]]","").replace("[[WRONG]]","").replace("[[OK]]","").replace("[[CHAT]]","")
+                    container.markdown(clean + "▌")
+            
+            final_content = full_res
+            action = None
+            
+            if "[[WIN]]" in full_res:
+                st.session_state.game_status = "WON"
+                log_activity(user['user_name'], "WIN")
+                final_content = full_res.replace("[[WIN]]", "")
+                action = "WIN"
+            elif "[[WRONG]]" in full_res:
+                st.session_state.wrong_guesses += 1
+                # --- [NEW] SAVE PROGRESS ---
+                save_user_progress(user['user_id'], st.session_state.question_count, st.session_state.wrong_guesses)
+                
+                log_activity(user['user_name'], "Guess Wrong")
+                final_content = full_res.replace("[[WRONG]]", "")
+                if st.session_state.wrong_guesses >= LIMIT_L:
+                    st.session_state.game_status = "LOST"
+                    log_activity(user['user_name'], "GAME OVER")
+                    action = "LOST"
+                else: action = "WRONG"
+            elif "[[OK]]" in full_res:
+                if st.session_state.question_count < LIMIT_Q:
+                    st.session_state.question_count += 1
+                    # --- [NEW] SAVE PROGRESS ---
+                    save_user_progress(user['user_id'], st.session_state.question_count, st.session_state.wrong_guesses)
+                    
+                    final_content = full_res.replace("[[OK]]", "")
+                    action = "OK"
+                else: final_content = "Đã hết lượt gợi ý! Hãy đoán tên đi."
+            else: final_content = full_res.replace("[[CHAT]]", "")
+
+            container.markdown(final_content)
+            st.session_state.messages.append({"role": "assistant", "content": final_content})
+            
+            if action: 
+                time.sleep(1)
+                st.rerun()
+
+    except Exception as e: st.error(f"Lỗi: {e}")
