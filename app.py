@@ -15,26 +15,23 @@ import json
 try:
     FIXED_GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 except:
-    # Key dự phòng nếu không có secret
     FIXED_GROQ_API_KEY = "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"
 
 FIXED_CSV_PATH = "res.csv"
 LOG_FILE_PATH = "game_logs.csv"
-CONFIG_FILE_PATH = "game_config.json" # File để Admin điều khiển game toàn server
-VIP_FILE_PATH = "vip_users.json"      # File lưu danh sách VIP
+CONFIG_FILE_PATH = "game_config.json"
+VIP_FILE_PATH = "vip_users.json"
 BACKGROUND_IMAGE_NAME = "background.jpg"
+PROGRESS_FILE = "user_progress.json" # File lưu trạng thái chống Reload
 
-# DANH SÁCH ADMIN (ID)
 ADMIN_IDS = ["250231", "250218"]
 
-# --- LUẬT CHƠI (STANDARD vs VIP) ---
-STD_MAX_QUESTIONS = 3   # Thường: 3 câu
-STD_MAX_LIVES = 1       # Thường: 1 mạng
-
-VIP_MAX_QUESTIONS = 5  # VIP: 5 câu
-VIP_MAX_LIVES = 3       # VIP: 3 mạng
-
-DEFAULT_DURATION = 15 
+# --- LUẬT CHƠI ---
+STD_MAX_QUESTIONS = 3   
+STD_MAX_LIVES = 1       
+VIP_MAX_QUESTIONS = 5  
+VIP_MAX_LIVES = 3       
+DEFAULT_DURATION = 15  
 
 FEMALE_NAMES = ["Khánh An", "Bảo Hân", "Lam Ngọc", "Phương Quỳnh", "Phương Nguyên", "Minh Thư"]
 
@@ -44,47 +41,68 @@ st.set_page_config(page_title="Secret Santa Festive", page_icon="🎄", layout="
 # 2. UTILS (HÀM HỖ TRỢ)
 # ==============================================================================
 
-# --- QUẢN LÝ VIP ---
-def get_vip_list():
-    if not os.path.exists(VIP_FILE_PATH):
-        return []
+# --- [NEW] HÀM LƯU TIẾN ĐỘ CHỐNG RELOAD ---
+def load_user_progress(user_id):
+    """Đọc tiến độ của user từ file json"""
+    if not os.path.exists(PROGRESS_FILE):
+        return None
     try:
-        with open(VIP_FILE_PATH, 'r') as f:
-            return json.load(f)
+        with open(PROGRESS_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            return data.get(str(user_id))
     except:
-        return []
+        return None
+
+def save_user_progress(user_id, q_count, w_guesses):
+    """Lưu tiến độ hiện tại của user"""
+    data = {}
+    if os.path.exists(PROGRESS_FILE):
+        try:
+            with open(PROGRESS_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        except:
+            data = {}
+    
+    data[str(user_id)] = {
+        "question_count": q_count,
+        "wrong_guesses": w_guesses
+    }
+    
+    with open(PROGRESS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
+
+# --- CÁC HÀM CŨ ---
+def get_vip_list():
+    if not os.path.exists(VIP_FILE_PATH): return []
+    try:
+        with open(VIP_FILE_PATH, 'r') as f: return json.load(f)
+    except: return []
 
 def add_vip_user(mshs):
     vips = get_vip_list()
     if mshs not in vips:
         vips.append(str(mshs).strip())
-        with open(VIP_FILE_PATH, 'w') as f:
-            json.dump(vips, f)
+        with open(VIP_FILE_PATH, 'w') as f: json.dump(vips, f)
         return True
     return False
 
-# --- LOGIC QUẢN LÝ TRẠNG THÁI GAME ---
 def get_game_config():
     if not os.path.exists(CONFIG_FILE_PATH):
         return {"end_time_epoch": 0, "is_active": False}
     try:
-        with open(CONFIG_FILE_PATH, 'r') as f:
-            return json.load(f)
-    except:
-        return {"end_time_epoch": 0, "is_active": False}
+        with open(CONFIG_FILE_PATH, 'r') as f: return json.load(f)
+    except: return {"end_time_epoch": 0, "is_active": False}
 
 def set_game_duration(minutes):
     end_time = time.time() + (minutes * 60)
     config = {"end_time_epoch": end_time, "is_active": True}
-    with open(CONFIG_FILE_PATH, 'w') as f:
-        json.dump(config, f)
+    with open(CONFIG_FILE_PATH, 'w') as f: json.dump(config, f)
     return end_time
 
 def stop_game():
     config = get_game_config()
     config["is_active"] = False
-    with open(CONFIG_FILE_PATH, 'w') as f:
-        json.dump(config, f)
+    with open(CONFIG_FILE_PATH, 'w') as f: json.dump(config, f)
 
 def get_base64_of_bin_file(bin_file):
     try:
@@ -123,13 +141,12 @@ def load_data(filepath):
         profiles = []
         for index, row in df.iterrows():
             target_name = str(row['TARGET (Ten)']).strip()
-            giver_name = str(row['Ten Nguoi Tang']).strip()
             if not target_name or target_name.lower() == 'nan': continue
             profiles.append({
                 "search_key": target_name.lower(),
                 "user_name": target_name,
                 "user_id": str(row['TARGET (MSHS)']).strip(),
-                "santa_name": giver_name,
+                "santa_name": str(row['Ten Nguoi Tang']).strip(),
                 "santa_id": str(row['Nguoi Tang (MSHS)']).strip()
             })
         return profiles
@@ -148,7 +165,6 @@ else:
 st.markdown(page_bg_img, unsafe_allow_html=True)
 st.markdown("""
 <style>
-    /* KHUNG CHÍNH */
     .main .block-container { 
         background-color: rgba(0, 0, 0, 1) !important; 
         padding: 30px !important; 
@@ -157,8 +173,6 @@ st.markdown("""
         box-shadow: 0 0 20px rgba(255, 215, 0, 1);
         max-width: 800px; 
     }
-    
-    /* TYPOGRAPHY CENTERED */
     h1 { 
         color: #FFD700 !important; 
         font-family: 'Arial Black', sans-serif; 
@@ -167,23 +181,14 @@ st.markdown("""
         letter-spacing: 2px;
         text-shadow: 2px 2px 4px #000;
     }
-    
-    h2, h3 { 
-        color: #FFFFFF !important; 
-        text-align: center !important; 
-    }
-    
+    h2, h3 { color: #FFFFFF !important; text-align: center !important; }
     .stAlert { text-align: center !important; }
-    
-    /* INPUT FIELD */
     .stTextInput input { 
         background-color: #FFFFFF !important; 
         color: #000000 !important; 
         font-weight: bold !important; 
         text-align: center !important; 
     }
-    
-    /* CHAT BUBBLES */
     div[data-testid="user-message"] { 
         background-color: #FFFFFF !important; 
         color: #004d00 !important; 
@@ -198,14 +203,7 @@ st.markdown("""
         padding: 15px !important; 
         font-weight: bold; 
     }
-
-    /* BUTTONS */
-    div.stButton > button {
-        width: 100%;
-        font-weight: bold;
-    }
-    
-    /* METRIC FOR ADMIN */
+    div.stButton > button { width: 100%; font-weight: bold; }
     div[data-testid="stMetric"] { background-color: #222222 !important; border: 1px solid #FFD700; border-radius: 10px; padding: 10px; }
     div[data-testid="stMetricValue"] { color: #FFD700 !important; }
     div[data-testid="stMetricLabel"] { color: #FFFFFF !important; }
@@ -221,12 +219,10 @@ if "is_admin" not in st.session_state: st.session_state.is_admin = False
 if "question_count" not in st.session_state: st.session_state.question_count = 0 
 if "wrong_guesses" not in st.session_state: st.session_state.wrong_guesses = 0  
 if "game_status" not in st.session_state: st.session_state.game_status = "PLAYING"
-# Thêm state cho limits
 if "current_max_q" not in st.session_state: st.session_state.current_max_q = STD_MAX_QUESTIONS
 if "current_max_l" not in st.session_state: st.session_state.current_max_l = STD_MAX_LIVES
 if "is_vip_user" not in st.session_state: st.session_state.is_vip_user = False
 
-# Lấy config hiện tại
 current_config = get_game_config()
 is_game_active = current_config["is_active"]
 game_end_time = current_config["end_time_epoch"]
@@ -244,64 +240,27 @@ if st.session_state.user_info is None and not st.session_state.is_admin:
     if not is_game_active:
         # ⏳ CHỜ: Xanh Dương Đậm
         st.markdown(
-            """<div style="
-                background-color: #003366; 
-                color: #FFFFFF; 
-                padding: 15px 20px; 
-                border-radius: 12px; 
-                border: 2px solid #3399FF;
-                text-align: center; 
-                font-weight: bold; 
-                font-size: 18px;
-                margin-bottom: 20px;
-                box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+            """<div style="background-color: #003366; color: #FFFFFF; padding: 15px 20px; border-radius: 12px; border: 2px solid #3399FF; text-align: center; font-weight: bold; font-size: 18px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
             ⏳ CỔNG CHƯA MỞ ⏳
-            </div>""", 
-            unsafe_allow_html=True
-        )
+            </div>""", unsafe_allow_html=True)
     elif current_time > game_end_time:
         # 🛑 KẾT THÚC: Đỏ Đậm
         st.markdown(
-            """<div style="
-                background-color: #8B0000; 
-                color: #FFFFFF; 
-                padding: 15px 20px; 
-                border-radius: 12px; 
-                border: 2px solid #FF6666;
-                text-align: center; 
-                font-weight: bold; 
-                font-size: 18px;
-                margin-bottom: 20px;
-                box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+            """<div style="background-color: #8B0000; color: #FFFFFF; padding: 15px 20px; border-radius: 12px; border: 2px solid #FF6666; text-align: center; font-weight: bold; font-size: 18px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
             🛑 SỰ KIỆN ĐÃ KẾT THÚC (HẾT GIỜ)
-            </div>""", 
-            unsafe_allow_html=True
-        )
+            </div>""", unsafe_allow_html=True)
     else:
         # 🟢 ĐANG MỞ: Xanh Lá Đậm
         st.markdown(
-            """<div style="
-                background-color: #006400; 
-                color: #FFFFFF; 
-                padding: 15px 20px; 
-                border-radius: 12px; 
-                border: 2px solid #33FF33;
-                text-align: center; 
-                font-weight: bold; 
-                font-size: 18px;
-                margin-bottom: 20px;
-                box-shadow: 0 0 15px rgba(50, 255, 50, 0.4);">
+            """<div style="background-color: #006400; color: #FFFFFF; padding: 15px 20px; border-radius: 12px; border: 2px solid #33FF33; text-align: center; font-weight: bold; font-size: 18px; margin-bottom: 20px; box-shadow: 0 0 15px rgba(50, 255, 50, 0.4);">
             🟢 CỔNG ĐANG MỞ! MỜI VÀO!
-            </div>""", 
-            unsafe_allow_html=True
-        )
+            </div>""", unsafe_allow_html=True)
 
     profiles = load_data(FIXED_CSV_PATH)
 
     with st.form("login_form"):
         st.markdown("**Nhập thông tin của bạn:**")
         user_input = st.text_input("Mã số học sinh (hoặc Tên):", placeholder="Ví dụ: 250218...")
-        
         submitted = st.form_submit_button("🚀 BƯỚC VÀO THẾ GIỚI", type="primary")
 
         if submitted and user_input:
@@ -310,46 +269,50 @@ if st.session_state.user_info is None and not st.session_state.is_admin:
             
             if len(matches) == 1:
                 selected_user = matches[0]
-                is_admin_user = selected_user['user_id'] in ADMIN_IDS
-                
+                user_id = selected_user['user_id']
+                is_admin_user = user_id in ADMIN_IDS
+
+                # --- [NEW] CHECK TIME UP NGAY TẠI CỔNG ---
+                if not is_admin_user and current_time > game_end_time:
+                     st.markdown("""<div style="background-color: #8B0000; color: #FFFFFF; padding: 15px; border-radius: 10px; border: 2px solid #FF0000; text-align: center; font-weight: bold; margin-top: 10px;">
+                        ⏳ ĐÃ HẾT GIỜ! KHÔNG THỂ ĐĂNG NHẬP.
+                        </div>""", unsafe_allow_html=True)
+                     st.stop()
+
                 # Check VIP
                 vip_list = get_vip_list()
-                is_vip = selected_user['user_id'] in vip_list
+                is_vip = user_id in vip_list
 
-                # Logic Gatekeeper (Kiểm soát giờ giấc cho user thường)
+                # Logic Gatekeeper
                 allow_entry = True
                 if not is_admin_user:
-                    if not is_game_active or current_time > game_end_time:
-                        allow_entry = False
+                    if not is_game_active: allow_entry = False
 
                 if allow_entry:
                     has_lost = check_if_lost(selected_user['user_name'])
                     if not is_admin_user and has_lost:
-                        # ⛔ BÁO LỖI: HẾT LƯỢT (Đỏ Đậm)
-                        st.markdown(
-                            """<div style="
-                                background-color: #8B0000; 
-                                color: #FFFFFF; 
-                                padding: 15px; 
-                                border-radius: 10px; 
-                                border: 2px solid #FF0000; 
-                                text-align: center; 
-                                font-weight: bold; 
-                                margin-top: 10px;">
+                        # ⛔ BÁO LỖI: HẾT LƯỢT
+                        st.markdown("""<div style="background-color: #8B0000; color: #FFFFFF; padding: 15px; border-radius: 10px; border: 2px solid #FF0000; text-align: center; font-weight: bold; margin-top: 10px;">
                             ⛔ BẠN ĐÃ HẾT LƯỢT THAM GIA!<br>Hẹn gặp lại mùa sau nhé.
-                            </div>""",
-                            unsafe_allow_html=True
-                        )
+                            </div>""", unsafe_allow_html=True)
                     else:
-                        # LOGIN SUCCESS (VÀO GAME)
+                        # LOGIN SUCCESS
                         st.session_state.user_info = selected_user
-                        st.session_state.question_count = 0
-                        st.session_state.wrong_guesses = 0
                         st.session_state.game_status = "PLAYING"
-                        st.session_state.messages = []
                         st.session_state.is_vip_user = is_vip
                         
-                        # Set limits based on VIP
+                        # --- [NEW] LOAD TIẾN ĐỘ CHỐNG RELOAD ---
+                        saved_progress = load_user_progress(user_id)
+                        if saved_progress:
+                            st.session_state.question_count = saved_progress.get("question_count", 0)
+                            st.session_state.wrong_guesses = saved_progress.get("wrong_guesses", 0)
+                            st.toast(f"🔄 Đã khôi phục tiến độ cũ.", icon="💾")
+                        else:
+                            st.session_state.question_count = 0
+                            st.session_state.wrong_guesses = 0
+
+                        st.session_state.messages = []
+
                         if is_vip:
                             st.session_state.current_max_q = VIP_MAX_QUESTIONS
                             st.session_state.current_max_l = VIP_MAX_LIVES
@@ -361,85 +324,39 @@ if st.session_state.user_info is None and not st.session_state.is_admin:
 
                         if not has_lost: log_activity(selected_user['user_name'], "Login")
                         
-                        # Welcome Message
-                        welcome_msg = f"Ho Ho Ho! Chào **{selected_user['user_name']}**! 🎅\n\n{limit_msg}\n\n👉 **Đưa BTC 10k nếu bạn muốn nạp VIP!**\n⏳ Hãy chú ý đồng hồ đếm ngược!\n\nChúc may mắn!"
+                        welcome_msg = f"Ho Ho Ho! Chào **{selected_user['user_name']}**! 🎅\n\n{limit_msg}\n\n👉 **Bạn đang ở: {st.session_state.question_count}/{st.session_state.current_max_q} câu hỏi**\n⏳ Hãy chú ý đồng hồ!\n\nChúc may mắn!"
                         st.session_state.messages.append({"role": "assistant", "content": welcome_msg})
                         st.rerun()
                 else:
-                    # BÁO LỖI KHI CỐ ĐĂNG NHẬP LÚC CỔNG ĐÓNG
                     if not is_game_active: 
-                        # 🚧 Cảnh báo chưa mở (Cam Đậm)
-                         st.markdown(
-                            """<div style="
-                                background-color: #995500; 
-                                color: #FFFFFF; 
-                                padding: 15px; 
-                                border-radius: 10px; 
-                                border: 2px solid #FFCC00; 
-                                text-align: center; 
-                                font-weight: bold; 
-                                margin-top: 10px;">
+                        # 🚧 Cảnh báo chưa mở
+                         st.markdown("""<div style="background-color: #995500; color: #FFFFFF; padding: 15px; border-radius: 10px; border: 2px solid #FFCC00; text-align: center; font-weight: bold; margin-top: 10px;">
                             🚧 CỔNG CHƯA MỞ! VUI LÒNG QUAY LẠI SAU.
-                            </div>""",
-                            unsafe_allow_html=True
-                        )
+                            </div>""", unsafe_allow_html=True)
                     else: 
-                        # 🏁 Cảnh báo hết giờ (Đỏ Đậm)
-                        st.markdown(
-                            """<div style="
-                                background-color: #8B0000; 
-                                color: #FFFFFF; 
-                                padding: 15px; 
-                                border-radius: 10px; 
-                                border: 2px solid #FF0000; 
-                                text-align: center; 
-                                font-weight: bold; 
-                                margin-top: 10px;">
+                        # 🏁 Cảnh báo hết giờ
+                        st.markdown("""<div style="background-color: #8B0000; color: #FFFFFF; padding: 15px; border-radius: 10px; border: 2px solid #FF0000; text-align: center; font-weight: bold; margin-top: 10px;">
                             🏁 SỰ KIỆN ĐÃ KẾT THÚC. KHÔNG THỂ ĐĂNG NHẬP.
-                            </div>""",
-                            unsafe_allow_html=True
-                        )
+                            </div>""", unsafe_allow_html=True)
 
             elif len(matches) > 1: 
-                # ⚠️ CẢNH BÁO TRÙNG TÊN (Cam Đậm)
-                st.markdown(
-                    """<div style="
-                        background-color: #995500; 
-                        color: #FFFFFF; 
-                        padding: 15px; 
-                        border-radius: 10px; 
-                        border: 2px solid #FFCC00; 
-                        text-align: center; 
-                        font-weight: bold; 
-                        margin-top: 10px;">
-                    ⚠️ PHÁT HIỆN TRÙNG TÊN!<br>Vui lòng nhập chính xác <b>Mã Số Học Sinh</b> để đăng nhập.
-                    </div>""",
-                    unsafe_allow_html=True
-                )
+                # ⚠️ CẢNH BÁO TRÙNG TÊN
+                st.markdown("""<div style="background-color: #995500; color: #FFFFFF; padding: 15px; border-radius: 10px; border: 2px solid #FFCC00; text-align: center; font-weight: bold; margin-top: 10px;">
+                    ⚠️ PHÁT HIỆN TRÙNG TÊN!<br>Vui lòng nhập chính xác <b>Mã Số Học Sinh</b>.
+                    </div>""", unsafe_allow_html=True)
             else: 
-                # ❌ KHÔNG TÌM THẤY (Đỏ Đậm)
-                st.markdown(
-                    """<div style="
-                        background-color: #8B0000; 
-                        color: #FFFFFF; 
-                        padding: 15px; 
-                        border-radius: 10px; 
-                        border: 2px solid #FF0000; 
-                        text-align: center; 
-                        font-weight: bold; 
-                        margin-top: 15px;">
+                # ❌ KHÔNG TÌM THẤY
+                st.markdown("""<div style="background-color: #8B0000; color: #FFFFFF; padding: 15px; border-radius: 10px; border: 2px solid #FF0000; text-align: center; font-weight: bold; margin-top: 15px;">
                     ❌ KHÔNG TÌM THẤY DỮ LIỆU NGƯỜI CHƠI.<br>Vui lòng kiểm tra lại Tên hoặc MSHS.
-                    </div>""",
-                    unsafe_allow_html=True
-                )
+                    </div>""", unsafe_allow_html=True)
     st.stop()
+
 # ==============================================================================
 # 6. ADMIN PANEL
 # ==============================================================================
 if st.session_state.is_admin:
     st.title("🛡️ TRUNG TÂM CHỈ HUY 🛡️(ADMIN)")
     
-    # --- PANEL ĐIỀU KHIỂN THỜI GIAN ---
     st.markdown("### ⏱️ ĐIỀU KHIỂN THỜI GIAN GAME")
     with st.container(border=True):
         col_t1, col_t2, col_t3 = st.columns([2, 1, 1])
@@ -460,7 +377,6 @@ if st.session_state.is_admin:
                 st.warning("Đã dừng game!")
                 st.rerun()
 
-    # --- PANEL NẠP VIP ---
     st.markdown("### 💎 NẠP VIP")
     with st.container(border=True):
         col_vip1, col_vip2 = st.columns([3, 1])
@@ -476,7 +392,6 @@ if st.session_state.is_admin:
                 else:
                     st.error("Chưa nhập MSHS.")
 
-    # --- SHOW REALTIME COUNTDOWN (PREVIEW) ---
     config = get_game_config()
     end_timestamp = config["end_time_epoch"]
     is_active_js = str(config["is_active"]).lower()
@@ -515,7 +430,6 @@ if st.session_state.is_admin:
         st.session_state.is_admin = False
         st.rerun()
 
-    # --- LOGS VÀ THỐNG KÊ ---
     st.markdown("### 📊 THỐNG KÊ")
     if os.path.exists(LOG_FILE_PATH):
         df_log = pd.read_csv(LOG_FILE_PATH)
@@ -543,7 +457,6 @@ if st.session_state.is_admin:
 user = st.session_state.user_info
 is_vip_admin = user['user_id'] in ADMIN_IDS
 
-# Lấy limits từ session
 LIMIT_Q = st.session_state.current_max_q
 LIMIT_L = st.session_state.current_max_l
 
@@ -551,16 +464,22 @@ config = get_game_config()
 is_active = config["is_active"]
 end_timestamp = config["end_time_epoch"]
 
-# Check Timeout
-if is_active:
-    if time.time() > end_timestamp:
-        if not is_vip_admin:
-            st.error("🛑 HẾT GIỜ! GAME OVER.")
-            st.stop()
-        else: st.toast("Admin Mode: Time is up.")
+# --- [NEW] REAL-TIME CHECK: NẾU HẾT GIỜ KHI ĐANG CHƠI THÌ CHẶN LUÔN ---
+if not is_vip_admin and is_active and time.time() > end_timestamp:
+    st.markdown(
+        """<div style="background-color: #8B0000; color: white; padding: 20px; border-radius: 15px; text-align: center; border: 3px solid red; font-size: 20px; font-weight: bold; margin-bottom: 20px;">
+        ⏰ <b>ĐÃ HẾT GIỜ!</b><br>
+        Sự kiện đã kết thúc trong khi bạn đang chơi.<br>
+        Rất tiếc, kết quả không được ghi nhận thêm.
+        </div>""", 
+        unsafe_allow_html=True
+    )
+    st.stop()
+# ------------------------------------------------------------------------
 
+# Check Admin Force Stop
 if not is_vip_admin and not is_active:
-    st.error("🛑 KẾT NỐI BỊ NGẮT (ADMIN STOP).")
+    st.markdown("""<div style="background-color: #8B0000; color: white; padding: 15px; border-radius: 10px; text-align: center; border: 2px solid red;">🛑 KẾT NỐI BỊ NGẮT (ADMIN STOP).</div>""", unsafe_allow_html=True)
     if st.button("Thoát"):
         st.session_state.user_info = None
         st.rerun()
@@ -576,17 +495,7 @@ l_left = LIMIT_L - st.session_state.wrong_guesses
 end_ts_js = end_timestamp if is_active else 0
 
 dashboard_html = f"""
-<div style="
-    display: flex; 
-    justify-content: space-around; 
-    align-items: center; 
-    background-color: #222222; 
-    border: 2px solid #FFD700; 
-    border-radius: 15px; 
-    padding: 15px; 
-    margin-bottom: 20px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-">
+<div style="display: flex; justify-content: space-around; align-items: center; background-color: #222222; border: 2px solid #FFD700; border-radius: 15px; padding: 15px; margin-bottom: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.5);">
     <div style="text-align: center; width: 30%;">
         <div style="color: #AAA; font-size: 12px; font-weight: bold;">GỢI Ý</div>
         <div style="color: #FFD700; font-size: 28px; font-weight: 900;">{q_left}<span style="font-size:14px; color:#666">/{LIMIT_Q}</span></div>
@@ -602,7 +511,6 @@ dashboard_html = f"""
         <div style="color: #FF4500; font-size: 28px; font-weight: 900;">{l_left}<span style="font-size:14px; color:#666">/{LIMIT_L}</span></div>
     </div>
 </div>
-
 <script>
     var endTs = {end_ts_js};
     function updateTimer() {{
@@ -644,135 +552,11 @@ with st.sidebar:
          st.session_state.user_info = None
          st.rerun()
 
-# CHAT HISTORY (DEFAULT ICONS)
+# CHAT HISTORY
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
 # CHECK GAME OVER / WIN
 if st.session_state.game_status == "LOST":
-    st.error("☠️ GAME OVER! BẠN ĐÃ HẾT MẠNG.")
-    st.info(f"Người tặng quà cho bạn là: **{user['santa_name']}**")
-    st.stop()
-
-if st.session_state.game_status == "WON":
-    st.balloons()
-    st.success(f"🎉 CHÍNH XÁC! SECRET SANTA LÀ: {user['santa_name']}")
-    st.stop()
-
-# INPUT AREA (DEFAULT ICONS)
-if prompt := st.chat_input("Nhập câu hỏi gợi ý hoặc đoán tên..."):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"): st.markdown(prompt)
-
-    try:
-        client = Groq(api_key=FIXED_GROQ_API_KEY)
-        
-        system_instruction = f"""
-        Bạn là AI Quản trò Secret Santa (tên mã NPLM). Tính cách: Lạnh lùng, bí hiểm, thích đánh đố, châm biếm nhưng công bằng.
-        
-        DỮ LIỆU BÍ MẬT:
-        - Người chơi (User): {user['user_name']}
-        - Kẻ Bí Mật (Santa): {user['santa_name']} (Giới tính: {target_gender}, MSHS: {user['santa_id']})
-        - Trạng thái: Đã hỏi {st.session_state.question_count}/{LIMIT_Q}. Sai {st.session_state.wrong_guesses}/{LIMIT_L}.
-        
-        CẤU TRÚC TÊN SANTA (Quan trọng):
-        - Tên Santa có dạng: [Họ] [Đệm] [Tên].
-        - Ví dụ: "Phạm Lê Minh Quân" -> Họ: Phạm, Đệm: Lê Minh, Tên chính: Quân.
-        - Mọi gợi ý về "Tên" chỉ liên quan đến "Tên chính" (từ cuối cùng).
-        - Gợi ý về "Họ" là từ đầu tiên.
-        - Gợi ý về "Chữ lót/Đệm" là các từ ở giữa.
-
-        QUY TẮC TUYỆT ĐỐI - BẠN PHẢI BẮT ĐẦU CÂU TRẢ LỜI BẰNG MỘT TRONG CÁC TOKEN SAU:
-
-        1. [[WIN]] : 
-           - Chỉ dùng khi user đoán ĐÚNG CẢ HỌ VÀ TÊN của Kẻ Bí Mật (chấp nhận không dấu, viết thường, đủ các thành phần). 
-           - Ví dụ: Santa là "Nguyễn Văn A". User đoán "Nguyễn Văn A" -> [[WIN]].
-           - Nếu thiếu họ hoặc đệm -> Dùng [[CHAT]] để nhắc nhở ghi đầy đủ.
-
-        2. [[WRONG]] : 
-           - Dùng khi user cố tình đưa ra một cái tên cụ thể (có vẻ là Họ Tên) để đoán nhưng SAI.
-           - Kèm lời chế giễu nhẹ nhàng về sự tự tin thái quá của họ.
-
-        3. [[OK]] : 
-           - Dùng khi user đặt câu hỏi gợi ý hợp lệ (Về giới tính, MSHS, tên chính, họ, chữ lót...).
-           - Nếu đã hỏi hết {LIMIT_Q} câu -> KHÔNG dùng [[OK]]. Hãy từ chối lạnh lùng và ép họ đoán tên.
-           - Nếu hỏi về ngoại hình/khuôn mặt -> Từ chối (bảo camera hỏng hoặc ta không quan tâm vẻ bề ngoài).
-           - Khi hỏi về "Tên": Chỉ gợi ý về TÊN CHÍNH (từ cuối cùng), ví dụ số chữ cái, chữ cái đầu của tên chính.
-
-        4. [[CHAT]] : 
-           - Các câu chat xã giao, tào lao, không đoán tên cũng không xin gợi ý.
-           - Dùng để nhắc nhở nếu user đoán tên mà thiếu họ/đệm.
-           - Xử lý câu hỏi về MSHS: TUYỆT ĐỐI KHÔNG tiết lộ con số cụ thể. Chỉ dùng các phép so sánh toán học (lớn hơn, bé hơn, chia hết cho X, là số nguyên tố hay không...). So sánh MSHS của Santa với MSHS của User ({user['user_id']}) là một cách hay.
-
-        LƯU Ý QUAN TRỌNG KHI TRẢ LỜI:
-        - KHÔNG BAO GIỜ tiết lộ tên hay họ tên của santa hoặc MSHS cụ thể của Santa.
-        - Mục tiêu: Làm cho trò chơi KHÓ NHẤT CÓ THỂ. Đừng gợi ý quá rõ ràng. Hãy dùng câu đố hoặc ẩn dụ.
-        - Hãy trả lời dài dòng, văn vở, bí hiểm một chút.
-        - Sử dụng nhiều emoji 🎄🎅❄️🎁💀😈 phù hợp với tính cách quản trò bí ẩn.
-        """
-        
-        messages_payload = [{"role": "system", "content": system_instruction}]
-        for m in st.session_state.messages[-6:]: messages_payload.append({"role": m["role"], "content": m["content"]})
-
-        with st.chat_message("assistant"):
-            container = st.empty()
-            full_res = ""
-            stream = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=messages_payload, stream=True)
-            
-            for chunk in stream:
-                if chunk.choices[0].delta.content:
-                    full_res += chunk.choices[0].delta.content
-                    clean = full_res.replace("[[WIN]]","").replace("[[WRONG]]","").replace("[[OK]]","").replace("[[CHAT]]","")
-                    container.markdown(clean + "▌")
-            
-            final_content = full_res
-            action = None
-            
-            if "[[WIN]]" in full_res:
-                st.session_state.game_status = "WON"
-                log_activity(user['user_name'], "WIN")
-                final_content = full_res.replace("[[WIN]]", "")
-                action = "WIN"
-            elif "[[WRONG]]" in full_res:
-                st.session_state.wrong_guesses += 1
-                log_activity(user['user_name'], "Guess Wrong")
-                final_content = full_res.replace("[[WRONG]]", "")
-                if st.session_state.wrong_guesses >= LIMIT_L:
-                    st.session_state.game_status = "LOST"
-                    log_activity(user['user_name'], "GAME OVER")
-                    action = "LOST"
-                else: action = "WRONG"
-            elif "[[OK]]" in full_res:
-                if st.session_state.question_count < LIMIT_Q:
-                    st.session_state.question_count += 1
-                    final_content = full_res.replace("[[OK]]", "")
-                    action = "OK"
-                else: final_content = "Đã hết lượt gợi ý! Hãy đoán tên đi."
-            else: final_content = full_res.replace("[[CHAT]]", "")
-
-            container.markdown(final_content)
-            st.session_state.messages.append({"role": "assistant", "content": final_content})
-            
-            if action: 
-                time.sleep(1)
-                st.rerun()
-
-    except Exception as e: st.error(f"Lỗi: {e}")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    st.markdown("""<div style="background-color: #
