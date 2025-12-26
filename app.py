@@ -706,7 +706,7 @@ if prompt := st.chat_input("Nhập câu hỏi gợi ý hoặc đoán tên..."):
            - Xử lý câu hỏi về MSHS: TUYỆT ĐỐI KHÔNG tiết lộ con số cụ thể. Chỉ dùng các phép so sánh toán học (lớn hơn, bé hơn, chia hết cho X, là số nguyên tố hay không...). So sánh MSHS của Santa với MSHS của User ({user['user_id']}) là một cách hay.
 
         LƯU Ý QUAN TRỌNG KHI TRẢ LỜI:
-        - KHÔNG BAO GIỜ tiết lộ tên thật hoặc MSHS cụ thể của Santa trừ khi đã [[WIN]].
+        - KHÔNG BAO GIỜ tiết lộ tên hay họ tên của santa hoặc MSHS cụ thể của Santa.
         - Mục tiêu: Làm cho trò chơi KHÓ NHẤT CÓ THỂ. Đừng gợi ý quá rõ ràng. Hãy dùng câu đố hoặc ẩn dụ.
         - Hãy trả lời dài dòng, văn vở, bí hiểm một chút.
         - Sử dụng nhiều emoji 🎄🎅❄️🎁💀😈 phù hợp với tính cách quản trò bí ẩn.
@@ -759,6 +759,7 @@ if prompt := st.chat_input("Nhập câu hỏi gợi ý hoặc đoán tên..."):
                 st.rerun()
 
     except Exception as e: st.error(f"Lỗi: {e}")
+
 
 
 
