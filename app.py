@@ -597,6 +597,7 @@ if prompt := st.chat_input("Nhập câu hỏi gợi ý hoặc đoán tên..."):
            - Chỉ dùng khi user đoán ĐÚNG CẢ HỌ VÀ TÊN của Kẻ Bí Mật (chấp nhận không dấu, viết thường, đủ các thành phần). 
            - Ví dụ: Santa là "Nguyễn Văn A". User đoán "Nguyễn Văn A" -> [[WIN]].
            - Nếu thiếu họ hoặc đệm -> Dùng [[CHAT]] để nhắc nhở ghi đầy đủ.
+           - Chỉ chấp nhận nếu user ghi đúng họ và tên.
 
         2. [[WRONG]] : 
            - Dùng khi user cố tình đưa ra một cái tên cụ thể (có vẻ là Họ Tên) để đoán nhưng SAI.
@@ -675,6 +676,7 @@ if prompt := st.chat_input("Nhập câu hỏi gợi ý hoặc đoán tên..."):
                 st.rerun()
 
     except Exception as e: st.error(f"Lỗi: {e}")
+
 
 
 
